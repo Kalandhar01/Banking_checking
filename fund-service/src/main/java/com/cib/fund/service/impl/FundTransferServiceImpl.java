@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -63,11 +65,18 @@ public class FundTransferServiceImpl implements FundTransferService {
         log.info("Transfer initiated: ref={}, amount={}, beneficiary={}",
                 transaction.getReferenceNumber(), transaction.getAmount(), transaction.getBeneficiaryName());
 
-        try {
-            approvalServiceClient.submitForApproval(transaction.getId(), request.getInitiatedBy());
-        } catch (Exception e) {
-            log.warn("Approval auto-submit failed for transaction {}: {}", transaction.getId(), e.getMessage());
-        }
+        Long txnId = transaction.getId();
+        String initiatedBy = request.getInitiatedBy();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    approvalServiceClient.submitForApproval(txnId, initiatedBy);
+                } catch (Exception e) {
+                    log.warn("Approval auto-submit failed for transaction {}: {}", txnId, e.getMessage());
+                }
+            }
+        });
 
         return toResponse(transaction);
     }
