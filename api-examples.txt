@@ -1,4 +1,148 @@
-========== FUND-SERVICE ==========
+====================== COMPLETE END-TO-END API FLOW ======================
+                        Corporate Internet Banking
+
+
+==============================================================
+ STEP 1: CREATE CUSTOMER (Company)
+==============================================================
+
+POST /customer/company
+Request:
+{
+  "companyName": "Tech Corp India Pvt Ltd",
+  "companyCode": "TECH001",
+  "address": "123, MG Road, Bangalore - 560001"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Customer created successfully",
+  "data": {
+    "id": 1,
+    "companyName": "Tech Corp India Pvt Ltd",
+    "companyCode": "TECH001",
+    "address": "123, MG Road, Bangalore - 560001",
+    "status": "ACTIVE"
+  }
+}
+
+
+==============================================================
+ STEP 2: CREATE USER (Maker) with Account
+==============================================================
+
+POST /customer/users
+Request:
+{
+  "employeeName": "Rajesh Kumar",
+  "email": "rajesh@techcorp.com",
+  "password": "pass123",
+  "role": "MAKER",
+  "checkerLevel": null,
+  "customerId": 1,
+  "accountNumber": "ACC100001",
+  "accountType": "SAVINGS",
+  "balance": 500000.00
+}
+
+Response:
+{
+  "success": true,
+  "message": "User created successfully",
+  "data": {
+    "id": 1,
+    "employeeName": "Rajesh Kumar",
+    "email": "rajesh@techcorp.com",
+    "role": "MAKER",
+    "checkerLevel": null,
+    "status": "ACTIVE",
+    "customerId": 1,
+    "account": {
+      "id": 1,
+      "accountNumber": "ACC100001",
+      "accountType": "SAVINGS",
+      "balance": 500000.00,
+      "status": "ACTIVE"
+    }
+  }
+}
+
+
+==============================================================
+ STEP 3: CREATE USER (Checker) with Account
+==============================================================
+
+POST /customer/users
+Request:
+{
+  "employeeName": "Priya Sharma",
+  "email": "priya@techcorp.com",
+  "password": "pass456",
+  "role": "CHECKER",
+  "checkerLevel": null,
+  "customerId": 1,
+  "accountNumber": "ACC100002",
+  "accountType": "SAVINGS",
+  "balance": 100000.00
+}
+
+Response:
+{
+  "success": true,
+  "message": "User created successfully",
+  "data": {
+    "id": 2,
+    "employeeName": "Priya Sharma",
+    "email": "priya@techcorp.com",
+    "role": "CHECKER",
+    "checkerLevel": null,
+    "status": "ACTIVE",
+    "customerId": 1,
+    "account": {
+      "id": 2,
+      "accountNumber": "ACC100002",
+      "accountType": "SAVINGS",
+      "balance": 100000.00,
+      "status": "ACTIVE"
+    }
+  }
+}
+
+
+==============================================================
+ STEP 4: CREATE BENEFICIARY
+==============================================================
+
+POST /beneficiary
+Request:
+{
+  "customerId": 1,
+  "beneficiaryName": "Vikram Mehta",
+  "accountNumber": "BEN450001",
+  "bankName": "HDFC Bank",
+  "ifscCode": "HDFC0001234"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Beneficiary 'Vikram Mehta' added successfully with ID: 1",
+  "data": {
+    "id": 1,
+    "customerId": 1,
+    "beneficiaryName": "Vikram Mehta",
+    "accountNumber": "BEN450001",
+    "bankName": "HDFC Bank",
+    "ifscCode": "HDFC0001234",
+    "status": "ACTIVE"
+  }
+}
+
+
+==============================================================
+ STEP 5: INITIATE FUND TRANSFER (Maker creates transaction)
+==============================================================
 
 POST /fund/transfer
 Request:
@@ -6,9 +150,9 @@ Request:
   "userId": 1,
   "customerId": 1,
   "beneficiaryId": 1,
-  "beneficiaryAccount": "ACC123456",
-  "beneficiaryName": "John Doe",
-  "amount": 50000.00,
+  "beneficiaryAccount": "BEN450001",
+  "beneficiaryName": "Vikram Mehta",
+  "amount": 25000.00,
   "currency": "INR",
   "initiatedBy": "1"
 }
@@ -22,9 +166,9 @@ Response:
     "userId": 1,
     "customerId": 1,
     "beneficiaryId": 1,
-    "beneficiaryAccount": "ACC123456",
-    "beneficiaryName": "John Doe",
-    "amount": 50000.00,
+    "beneficiaryAccount": "BEN450001",
+    "beneficiaryName": "Vikram Mehta",
+    "amount": 25000.00,
     "currency": "INR",
     "referenceNumber": "TXN2025072112345512345",
     "status": "PENDING",
@@ -36,155 +180,163 @@ Response:
   }
 }
 
----
 
-PUT /fund/{id}/approve
-Request (JSON body):
-{
-  "checkerId": "2"
-}
+==============================================================
+ STEP 6: CHECKER VIEWS ALL PENDING TRANSACTIONS
+==============================================================
 
-Response:
-{
-  "success": true,
-  "message": "Transaction TXN2025072112345512345 approved by 2",
-  "data": {
-    "id": 1,
-    "status": "APPROVED",
-    "approvedBy": "2",
-    ...
-  }
-}
-
----
-
-PUT /fund/{id}/complete
-Request (JSON body):
-{
-  "approvedBy": "2"
-}
+GET /approval/pending
+    -- OR --
+GET /fund/pending
 
 Response:
 {
   "success": true,
-  "message": "Transaction TXN2025072112345512345 completed by 2",
+  "message": "Pending approvals retrieved. Count: 1",
+  "data": [
+    {
+      "id": 1,
+      "userId": 1,
+      "customerId": 1,
+      "beneficiaryId": 1,
+      "beneficiaryAccount": "BEN450001",
+      "beneficiaryName": "Vikram Mehta",
+      "amount": 25000.00,
+      "currency": "INR",
+      "referenceNumber": "TXN2025072112345512345",
+      "status": "PENDING",
+      "initiatedBy": "1",
+      "approvedBy": null,
+      "rejectionReason": null,
+      "createdAt": "2025-07-21T12:34:55",
+      "updatedAt": "2025-07-21T12:34:55"
+    }
+  ]
+}
+
+
+==============================================================
+ STEP 7: CHECKER ACCEPTS TRANSACTION
+ (Auto-validates: Maker ACTIVE, Customer ACTIVE, Beneficiary ACTIVE)
+==============================================================
+
+PUT /approval/1/act
+Request:
+{
+  "checkerId": "2",
+  "action": "ACCEPT",
+  "remarks": "All verifications passed"
+}
+
+Response (success - validation passed, approved, debited, completed):
+{
+  "success": true,
+  "message": "Transaction 1 accepted by checker 2",
   "data": {
     "id": 1,
     "status": "COMPLETED",
     "approvedBy": "2",
-    ...
+    "createdAt": "2025-07-21T12:34:55",
+    "updatedAt": "2025-07-21T12:37:20"
   }
 }
 
----
 
-PUT /fund/{id}/reject
-Request (JSON body):
+==============================================================
+ STEP 7b: CHECKER REJECTS TRANSACTION
+==============================================================
+
+PUT /approval/1/act
+Request:
 {
-  "rejectedBy": "2",
-  "reason": "Invalid details"
+  "checkerId": "2",
+  "action": "REJECT",
+  "remarks": "Insufficient funds in source account"
 }
 
 Response:
 {
   "success": true,
-  "message": "Transaction TXN2025072112345512345 rejected by 2",
+  "message": "Transaction 1 rejected by checker 2",
   "data": {
     "id": 1,
     "status": "REJECTED",
     "approvedBy": "2",
-    "rejectionReason": "Invalid details",
-    ...
+    "rejectionReason": "Insufficient funds in source account",
+    "updatedAt": "2025-07-21T12:40:00"
   }
 }
 
----
 
-PUT /fund/{id}/fail
-Request (JSON body):
+==============================================================
+ STEP 7c: AUTO-REJECT (when validation fails)
+==============================================================
+
+If Maker is INACTIVE, Customer is INACTIVE, or Beneficiary is INACTIVE,
+the system auto-rejects when checker tries to ACCEPT:
+
+PUT /approval/1/act
+Request:
 {
-  "approvedBy": "2",
-  "reason": "Debit failed"
+  "checkerId": "2",
+  "action": "ACCEPT"
 }
 
-Response:
+Response (auto-rejected):
 {
   "success": true,
-  "message": "Transaction TXN2025072112345512345 failed. Reason: Debit failed",
+  "message": "Transaction 1 accepted by checker 2",
   "data": {
     "id": 1,
-    "status": "FAILED",
-    "rejectionReason": "Debit failed",
-    ...
+    "status": "REJECTED",
+    "rejectionReason": "Maker (user ID 1) is not ACTIVE",
+    "updatedAt": "2025-07-21T12:45:00"
   }
 }
 
----
 
-GET /fund/{id}
+==============================================================
+ STEP 8: GET TRANSACTION DETAILS
+==============================================================
+
+GET /approval/transaction/1
+    -- OR --
+GET /fund/1
+
 Response:
 {
   "success": true,
-  "message": "Transaction TXN2025072112345512345 found. Status: PENDING",
+  "message": "Transaction TXN2025072112345512345 found. Status: COMPLETED",
   "data": {
     "id": 1,
     "userId": 1,
     "customerId": 1,
     "beneficiaryId": 1,
-    "beneficiaryAccount": "ACC123456",
-    "beneficiaryName": "John Doe",
-    "amount": 50000.00,
+    "beneficiaryAccount": "BEN450001",
+    "beneficiaryName": "Vikram Mehta",
+    "amount": 25000.00,
     "currency": "INR",
     "referenceNumber": "TXN2025072112345512345",
-    "status": "PENDING",
+    "status": "COMPLETED",
     "initiatedBy": "1",
-    "approvedBy": null,
+    "approvedBy": "2",
     "rejectionReason": null,
     "createdAt": "2025-07-21T12:34:55",
-    "updatedAt": "2025-07-21T12:34:55"
+    "updatedAt": "2025-07-21T12:37:20"
   }
 }
 
----
 
-GET /fund/pending
+==============================================================
+ STEP 9: VIEW AUDIT TRAIL
+==============================================================
+
+GET /fund/1/audit
+
 Response:
 {
   "success": true,
-  "message": "Pending transactions retrieved. Count: 2",
-  "data": [
-    {
-      "id": 1,
-      "amount": 50000.00,
-      "status": "PENDING",
-      ...
-    },
-    {
-      "id": 2,
-      "amount": 150000.00,
-      "status": "PENDING",
-      ...
-    }
-  ]
-}
-
----
-
-GET /fund/customer/{customerId}
-Response:
-{
-  "success": true,
-  "message": "Transactions retrieved for customer ID 1. Count: 3",
-  "data": [ ... ]
-}
-
----
-
-GET /fund/{id}/audit
-Response:
-{
-  "success": true,
-  "message": "Audit trail retrieved for transaction ID 1. Count: 2",
+  "message": "Audit trail retrieved for transaction ID 1. Count: 4",
   "data": [
     {
       "id": 1,
@@ -202,101 +354,40 @@ Response:
       "toStatus": "APPROVED",
       "changedBy": "2",
       "comment": "Approved by checker",
-      "createdAt": "2025-07-21T12:35:10"
-    }
-  ]
-}
-
-
-========== APPROVAL-SERVICE ==========
-
-GET /approval/pending
-Response:
-{
-  "success": true,
-  "message": "Pending approvals retrieved. Count: 2",
-  "data": [
+      "createdAt": "2025-07-21T12:37:10"
+    },
     {
-      "id": 1,
-      "userId": 1,
-      "customerId": 1,
-      "beneficiaryId": 1,
-      "beneficiaryAccount": "ACC123456",
-      "beneficiaryName": "John Doe",
-      "amount": 50000.00,
-      "currency": "INR",
-      "referenceNumber": "TXN2025072112345512345",
-      "status": "PENDING",
-      "initiatedBy": "1",
-      "approvedBy": null,
-      "rejectionReason": null,
-      "createdAt": "2025-07-21T12:34:55",
-      "updatedAt": "2025-07-21T12:34:55"
+      "id": 3,
+      "transactionId": 1,
+      "fromStatus": "APPROVED",
+      "toStatus": "COMPLETED",
+      "changedBy": "2",
+      "comment": "Transaction completed",
+      "createdAt": "2025-07-21T12:37:20"
     }
   ]
 }
 
----
 
-PUT /approval/{transactionId}/act
-Request (ACCEPT):
-{
-  "checkerId": "2",
-  "action": "ACCEPT",
-  "remarks": "All checks passed"
-}
+==============================================================
+ EXTRA: VIEW TRANSACTIONS BY CUSTOMER
+==============================================================
 
-Response (ACCEPT - approval+debit+complete succeed):
-{
-  "success": true,
-  "message": "Transaction 1 accepted by checker 2",
-  "data": {
-    "id": 1,
-    "status": "COMPLETED",
-    "approvedBy": "2",
-    ...
-  }
-}
-
-Response (ACCEPT - validation fails):
-Auto-rejects. Status becomes "REJECTED" with rejectionReason like "Maker (user ID 1) is not ACTIVE"
-
----
-
-PUT /approval/{transactionId}/act
-Request (REJECT):
-{
-  "checkerId": "2",
-  "action": "REJECT",
-  "remarks": "Insufficient funds"
-}
+GET /fund/customer/1
 
 Response:
 {
   "success": true,
-  "message": "Transaction 1 rejected by checker 2",
-  "data": {
-    "id": 1,
-    "status": "REJECTED",
-    "rejectionReason": "Insufficient funds",
-    ...
-  }
+  "message": "Transactions retrieved for customer ID 1. Count: 1",
+  "data": [ ... ]
 }
 
----
 
-GET /approval/transaction/{transactionId}
-Response:
-{
-  "success": true,
-  "message": "Transaction 1 details retrieved",
-  "data": {
-    "id": 1,
-    "userId": 1,
-    "customerId": 1,
-    "beneficiaryId": 1,
-    "amount": 50000.00,
-    "status": "PENDING",
-    ...
-  }
-}
+==============================================================
+ EXTRA: GET CUSTOMER / USER / BENEFICIARY
+==============================================================
+
+GET /customer/company/1
+GET /customer/users/1
+GET /beneficiary/1
+GET /beneficiary/1/validate
