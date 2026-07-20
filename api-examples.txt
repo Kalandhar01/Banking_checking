@@ -1,0 +1,280 @@
+========== FUND-SERVICE ==========
+
+POST /fund/transfer
+Request:
+{
+  "userId": 1,
+  "customerId": 1,
+  "beneficiaryId": 1,
+  "beneficiaryAccount": "ACC123456",
+  "beneficiaryName": "John Doe",
+  "amount": 50000.00,
+  "currency": "INR",
+  "initiatedBy": "1"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Transfer initiated. Reference: TXN2025072112345512345, ID: 1",
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "customerId": 1,
+    "beneficiaryId": 1,
+    "beneficiaryAccount": "ACC123456",
+    "beneficiaryName": "John Doe",
+    "amount": 50000.00,
+    "currency": "INR",
+    "referenceNumber": "TXN2025072112345512345",
+    "status": "PENDING",
+    "initiatedBy": "1",
+    "approvedBy": null,
+    "rejectionReason": null,
+    "createdAt": "2025-07-21T12:34:55",
+    "updatedAt": "2025-07-21T12:34:55"
+  }
+}
+
+---
+
+PUT /fund/{id}/approve?checkerId=2
+Response:
+{
+  "success": true,
+  "message": "Transaction TXN2025072112345512345 approved by 2",
+  "data": {
+    "id": 1,
+    "status": "APPROVED",
+    "approvedBy": "2",
+    ...
+  }
+}
+
+---
+
+PUT /fund/{id}/complete?approvedBy=2
+Response:
+{
+  "success": true,
+  "message": "Transaction TXN2025072112345512345 completed by 2",
+  "data": {
+    "id": 1,
+    "status": "COMPLETED",
+    "approvedBy": "2",
+    ...
+  }
+}
+
+---
+
+PUT /fund/{id}/reject?rejectedBy=2&reason=Invalid%20details
+Response:
+{
+  "success": true,
+  "message": "Transaction TXN2025072112345512345 rejected by 2",
+  "data": {
+    "id": 1,
+    "status": "REJECTED",
+    "approvedBy": "2",
+    "rejectionReason": "Invalid details",
+    ...
+  }
+}
+
+---
+
+PUT /fund/{id}/fail?approvedBy=2&reason=Debit%20failed
+Response:
+{
+  "success": true,
+  "message": "Transaction TXN2025072112345512345 failed. Reason: Debit failed",
+  "data": {
+    "id": 1,
+    "status": "FAILED",
+    "rejectionReason": "Debit failed",
+    ...
+  }
+}
+
+---
+
+GET /fund/{id}
+Response:
+{
+  "success": true,
+  "message": "Transaction TXN2025072112345512345 found. Status: PENDING",
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "customerId": 1,
+    "beneficiaryId": 1,
+    "beneficiaryAccount": "ACC123456",
+    "beneficiaryName": "John Doe",
+    "amount": 50000.00,
+    "currency": "INR",
+    "referenceNumber": "TXN2025072112345512345",
+    "status": "PENDING",
+    "initiatedBy": "1",
+    "approvedBy": null,
+    "rejectionReason": null,
+    "createdAt": "2025-07-21T12:34:55",
+    "updatedAt": "2025-07-21T12:34:55"
+  }
+}
+
+---
+
+GET /fund/pending
+Response:
+{
+  "success": true,
+  "message": "Pending transactions retrieved. Count: 2",
+  "data": [
+    {
+      "id": 1,
+      "amount": 50000.00,
+      "status": "PENDING",
+      ...
+    },
+    {
+      "id": 2,
+      "amount": 150000.00,
+      "status": "PENDING",
+      ...
+    }
+  ]
+}
+
+---
+
+GET /fund/customer/{customerId}
+Response:
+{
+  "success": true,
+  "message": "Transactions retrieved for customer ID 1. Count: 3",
+  "data": [ ... ]
+}
+
+---
+
+GET /fund/{id}/audit
+Response:
+{
+  "success": true,
+  "message": "Audit trail retrieved for transaction ID 1. Count: 2",
+  "data": [
+    {
+      "id": 1,
+      "transactionId": 1,
+      "fromStatus": null,
+      "toStatus": "PENDING",
+      "changedBy": "1",
+      "comment": "Transaction initiated",
+      "createdAt": "2025-07-21T12:34:55"
+    },
+    {
+      "id": 2,
+      "transactionId": 1,
+      "fromStatus": "PENDING",
+      "toStatus": "APPROVED",
+      "changedBy": "2",
+      "comment": "Approved by checker",
+      "createdAt": "2025-07-21T12:35:10"
+    }
+  ]
+}
+
+
+========== APPROVAL-SERVICE ==========
+
+GET /approval/pending
+Response:
+{
+  "success": true,
+  "message": "Pending approvals retrieved. Count: 2",
+  "data": [
+    {
+      "id": 1,
+      "userId": 1,
+      "customerId": 1,
+      "beneficiaryId": 1,
+      "beneficiaryAccount": "ACC123456",
+      "beneficiaryName": "John Doe",
+      "amount": 50000.00,
+      "currency": "INR",
+      "referenceNumber": "TXN2025072112345512345",
+      "status": "PENDING",
+      "initiatedBy": "1",
+      "approvedBy": null,
+      "rejectionReason": null,
+      "createdAt": "2025-07-21T12:34:55",
+      "updatedAt": "2025-07-21T12:34:55"
+    }
+  ]
+}
+
+---
+
+PUT /approval/{transactionId}/act
+Request (ACCEPT):
+{
+  "checkerId": "2",
+  "action": "ACCEPT",
+  "remarks": "All checks passed"
+}
+
+Response (ACCEPT - approval+debit+complete succeed):
+{
+  "success": true,
+  "message": "Transaction 1 accepted by checker 2",
+  "data": {
+    "id": 1,
+    "status": "COMPLETED",
+    "approvedBy": "2",
+    ...
+  }
+}
+
+Response (ACCEPT - validation fails):
+Auto-rejects. Status becomes "REJECTED" with rejectionReason like "Maker (user ID 1) is not ACTIVE"
+
+---
+
+PUT /approval/{transactionId}/act
+Request (REJECT):
+{
+  "checkerId": "2",
+  "action": "REJECT",
+  "remarks": "Insufficient funds"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Transaction 1 rejected by checker 2",
+  "data": {
+    "id": 1,
+    "status": "REJECTED",
+    "rejectionReason": "Insufficient funds",
+    ...
+  }
+}
+
+---
+
+GET /approval/transaction/{transactionId}
+Response:
+{
+  "success": true,
+  "message": "Transaction 1 details retrieved",
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "customerId": 1,
+    "beneficiaryId": 1,
+    "amount": 50000.00,
+    "status": "PENDING",
+    ...
+  }
+}
