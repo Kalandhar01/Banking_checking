@@ -1,15 +1,14 @@
 package com.cib.fund.service.impl;
 
-import com.cib.fund.dto.BeneficiaryValidationResponse;
-import com.cib.fund.dto.FundTransferRequest;
-import com.cib.fund.dto.FundTransferResponse;
-import com.cib.fund.dto.TransactionAuditResponse;
+import com.cib.fund.dto.*;
 import com.cib.fund.entity.FundTransaction;
 import com.cib.fund.entity.TransactionAudit;
 import com.cib.fund.enums.TransactionStatus;
 import com.cib.fund.exception.InvalidTransactionException;
 import com.cib.fund.exception.ResourceNotFoundException;
 import com.cib.fund.feign.BeneficiaryClient;
+import com.cib.fund.feign.CustomerAccountClient;
+import com.cib.fund.feign.CustomerUserClient;
 import com.cib.fund.repository.FundTransactionRepository;
 import com.cib.fund.repository.TransactionAuditRepository;
 import com.cib.fund.service.FundTransferService;
@@ -18,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -28,9 +28,13 @@ import java.util.Random;
 @RequiredArgsConstructor
 public class FundTransferServiceImpl implements FundTransferService {
 
+    private static final BigDecimal LEVEL2_THRESHOLD = new BigDecimal("100000");
+
     private final FundTransactionRepository transactionRepository;
     private final TransactionAuditRepository auditRepository;
     private final BeneficiaryClient beneficiaryClient;
+    private final CustomerAccountClient customerAccountClient;
+    private final CustomerUserClient customerUserClient;
 
     @Override
     @Transactional
@@ -66,72 +70,160 @@ public class FundTransferServiceImpl implements FundTransferService {
 
     @Override
     @Transactional
-    public FundTransferResponse completeTransaction(Long transactionId, String approvedBy) {
+    public FundTransferResponse actLevel1(Long transactionId, CheckerActionRequest req) {
         FundTransaction transaction = findTransaction(transactionId);
 
         if (transaction.getStatus() != TransactionStatus.PENDING) {
             throw new InvalidTransactionException(
-                    "Only PENDING transactions can be completed. Current status: " + transaction.getStatus());
+                    "Transaction is not in PENDING state. Current status: " + transaction.getStatus());
         }
 
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setStatus(TransactionStatus.COMPLETED);
-        transaction.setApprovedBy(approvedBy);
-        transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.COMPLETED, approvedBy,
-                "Transaction completed");
+        CustomerUserDto checker = validateChecker(req.getCheckerId(), "LEVEL_1");
+        boolean requiresLevel2 = transaction.getAmount() != null
+                && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
 
-        log.info("Transaction {} completed by {}", transaction.getReferenceNumber(), approvedBy);
+        if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
+            if (requiresLevel2) {
+                transaction.setStatus(TransactionStatus.LEVEL1_APPROVED);
+                transaction.setApprovedBy(req.getCheckerId());
+                transactionRepository.save(transaction);
+                createAudit(transaction, TransactionStatus.PENDING, TransactionStatus.LEVEL1_APPROVED,
+                        req.getCheckerId(), "Level 1 approved");
+                log.info("Transaction {} Level 1 approved by checker {}", transactionId, req.getCheckerId());
+            } else {
+                executeDebitAndComplete(transaction, req.getCheckerId());
+            }
+        } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 1 checker";
+            transaction.setStatus(TransactionStatus.REJECTED);
+            transaction.setApprovedBy(req.getCheckerId());
+            transaction.setRejectionReason(reason);
+            transactionRepository.save(transaction);
+            createAudit(transaction, TransactionStatus.PENDING, TransactionStatus.REJECTED,
+                    req.getCheckerId(), reason);
+            log.info("Transaction {} rejected by Level 1 checker {}", transactionId, req.getCheckerId());
+        } else {
+            throw new InvalidTransactionException("Invalid action. Must be ACCEPT or REJECT.");
+        }
+
         return toResponse(transaction);
     }
 
     @Override
     @Transactional
-    public FundTransferResponse failTransaction(Long transactionId, String approvedBy, String reason) {
+    public FundTransferResponse actLevel2(Long transactionId, CheckerActionRequest req) {
         FundTransaction transaction = findTransaction(transactionId);
 
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setStatus(TransactionStatus.FAILED);
-        transaction.setApprovedBy(approvedBy);
-        transaction.setRejectionReason(reason);
-        transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.FAILED, approvedBy, reason);
+        if (transaction.getStatus() != TransactionStatus.LEVEL1_APPROVED) {
+            throw new InvalidTransactionException(
+                    "Transaction must be in LEVEL1_APPROVED state. Current state: " + transaction.getStatus());
+        }
 
-        log.info("Transaction {} failed by {}. Reason: {}", transaction.getReferenceNumber(), approvedBy, reason);
+        CustomerUserDto checker = validateChecker(req.getCheckerId(), "LEVEL_2");
+
+        if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
+            executeDebitAndComplete(transaction, req.getCheckerId());
+        } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 2 checker";
+            transaction.setStatus(TransactionStatus.REJECTED);
+            transaction.setApprovedBy(req.getCheckerId());
+            transaction.setRejectionReason(reason);
+            transactionRepository.save(transaction);
+            createAudit(transaction, TransactionStatus.LEVEL1_APPROVED, TransactionStatus.REJECTED,
+                    req.getCheckerId(), reason);
+            log.info("Transaction {} rejected by Level 2 checker {}", transactionId, req.getCheckerId());
+        } else {
+            throw new InvalidTransactionException("Invalid action. Must be ACCEPT or REJECT.");
+        }
+
         return toResponse(transaction);
     }
 
-    @Override
-    @Transactional
-    public FundTransferResponse rejectTransaction(Long transactionId, String rejectedBy, String reason) {
-        FundTransaction transaction = findTransaction(transactionId);
-
-        if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new InvalidTransactionException(
-                    "Only PENDING transactions can be rejected. Current status: " + transaction.getStatus());
+    private void executeDebitAndComplete(FundTransaction transaction, String checkerId) {
+        Long transactionId = transaction.getId();
+        var accountResponse = customerAccountClient.getAccountByUserId(transaction.getUserId());
+        if (accountResponse == null || !accountResponse.isSuccess() || accountResponse.getData() == null) {
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setApprovedBy(checkerId);
+            transaction.setRejectionReason("Failed to fetch customer account");
+            transactionRepository.save(transaction);
+            createAudit(transaction, transaction.getStatus(), TransactionStatus.FAILED,
+                    checkerId, "Failed to fetch account");
+            log.info("Transaction {} failed: unable to fetch account", transactionId);
+            return;
         }
 
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setStatus(TransactionStatus.REJECTED);
-        transaction.setApprovedBy(rejectedBy);
-        transaction.setRejectionReason(reason);
-        transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.REJECTED, rejectedBy, reason);
+        AccountTransactionRequest debitRequest = AccountTransactionRequest.builder()
+                .amount(transaction.getAmount())
+                .reference(transaction.getReferenceNumber())
+                .build();
 
-        log.info("Transaction {} rejected by {}. Reason: {}", transaction.getReferenceNumber(), rejectedBy, reason);
-        return toResponse(transaction);
+        var debitResult = customerAccountClient.debitAccount(accountResponse.getData().getId(), debitRequest);
+        if (debitResult == null || !debitResult.isSuccess()) {
+            String reason = debitResult != null ? debitResult.getMessage() : "Debit failed";
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setApprovedBy(checkerId);
+            transaction.setRejectionReason(reason);
+            transactionRepository.save(transaction);
+            createAudit(transaction, transaction.getStatus(), TransactionStatus.FAILED,
+                    checkerId, "Debit failed: " + reason);
+            log.info("Transaction {} failed: debit failed", transactionId);
+            return;
+        }
+
+        transaction.setStatus(TransactionStatus.APPROVED);
+        transaction.setApprovedBy(checkerId);
+        transactionRepository.save(transaction);
+        createAudit(transaction, transaction.getStatus(), TransactionStatus.APPROVED,
+                checkerId, "Transaction completed and debited");
+        log.info("Transaction {} fully approved and debited by checker {}", transactionId, checkerId);
+    }
+
+    private CustomerUserDto validateChecker(String checkerId, String expectedLevel) {
+        CustomerUserDto checker = customerUserClient.getUser(Long.valueOf(checkerId));
+        if (checker == null) {
+            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
+        }
+        if (!"CHECKER".equalsIgnoreCase(checker.getRole())) {
+            throw new InvalidTransactionException("User " + checkerId + " is not a CHECKER.");
+        }
+        if (!"ACTIVE".equalsIgnoreCase(checker.getStatus())) {
+            throw new InvalidTransactionException("Checker account is not ACTIVE");
+        }
+        if (!expectedLevel.equalsIgnoreCase(checker.getCheckerLevel())) {
+            throw new InvalidTransactionException(
+                    "User " + checkerId + " is not a " + expectedLevel + " checker.");
+        }
+        return checker;
+    }
+
+    @Override
+    public List<FundTransferResponse> getPendingLevel1() {
+        return transactionRepository.findByStatusOrderByCreatedAtDesc(TransactionStatus.PENDING)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<FundTransferResponse> getPendingLevel2() {
+        return transactionRepository.findByStatusOrderByCreatedAtDesc(TransactionStatus.LEVEL1_APPROVED)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
     public FundTransferResponse getTransactionById(Long id) {
-        FundTransaction transaction = findTransaction(id);
-        return toResponse(transaction);
+        return toResponse(findTransaction(id));
     }
 
     @Override
     public List<FundTransferResponse> getTransactionsByCustomerId(Long customerId) {
-        List<FundTransaction> transactions = transactionRepository.findByCustomerIdOrderByCreatedAtDesc(customerId);
-        return transactions.stream().map(this::toResponse).toList();
+        return transactionRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Override
