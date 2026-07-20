@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.List;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -25,7 +27,8 @@ public class FundServiceClient {
                     url,
                     HttpMethod.GET,
                     null,
-                    new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {}
+                    new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {
+                    }
             );
             ApiResponse<FundTransactionDto> body = response.getBody();
             if (body != null && body.isSuccess()) {
@@ -37,6 +40,128 @@ public class FundServiceClient {
             throw new RuntimeException("Fund service is unavailable. Please try again later.");
         } catch (Exception e) {
             log.error("Error fetching transaction {}: {}", transactionId, e.getMessage());
+            return null;
+        }
+    }
+
+    public List<FundTransactionDto> getPendingTransactions() {
+        try {
+            String url = FUND_SERVICE_URL + "/pending";
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<List<FundTransactionDto>>>() {
+                    }
+            );
+            ApiResponse<List<FundTransactionDto>> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            return List.of();
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error fetching pending transactions: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    public List<FundTransactionDto> getPendingLevel1Transactions() {
+        try {
+            String url = FUND_SERVICE_URL + "/pending/level-1";
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<List<FundTransactionDto>>>() {
+                    }
+            );
+            ApiResponse<List<FundTransactionDto>> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            return List.of();
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error fetching Level 1 pending: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    public List<FundTransactionDto> getPendingLevel2Transactions() {
+        try {
+            String url = FUND_SERVICE_URL + "/pending/level-2";
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<List<FundTransactionDto>>>() {
+                    }
+            );
+            ApiResponse<List<FundTransactionDto>> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            return List.of();
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error fetching Level 2 pending: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    public FundTransactionDto approveLevel1(Long transactionId, String checkerId) {
+        try {
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/level-1-approve?checkerId=" + checkerId;
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {
+                    }
+            );
+            ApiResponse<FundTransactionDto> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            log.error("Level 1 approve failed for transaction {}: response unsuccessful", transactionId);
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error in Level 1 approve for transaction {}: {}", transactionId, e.getMessage());
+            return null;
+        }
+    }
+
+    public FundTransactionDto approveLevel2(Long transactionId, String checkerId) {
+        try {
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/level-2-approve?checkerId=" + checkerId;
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {
+                    }
+            );
+            ApiResponse<FundTransactionDto> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            log.error("Level 2 approve failed for transaction {}: response unsuccessful", transactionId);
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error in Level 2 approve for transaction {}: {}", transactionId, e.getMessage());
             return null;
         }
     }
