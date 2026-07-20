@@ -41,10 +41,10 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<ApprovalResponse>> rejectTransaction(
             @PathVariable Long transactionId,
             @PathVariable String checkerId,
-            @RequestParam String reason) {
-        ApprovalResponse response = approvalService.rejectTransactionByTxId(transactionId, checkerId, reason);
+            @Valid @RequestBody RejectRequest request) {
+        ApprovalResponse response = approvalService.rejectTransactionByTxId(transactionId, checkerId, request.getRemarks());
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + transactionId + " rejected by checker " + checkerId + ". Reason: " + reason,
+                "Transaction " + transactionId + " rejected by checker " + checkerId + ". Reason: " + request.getRemarks(),
                 response));
     }
 
