@@ -15,12 +15,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ApprovalServiceImpl implements ApprovalService {
+
+    private static final BigDecimal LEVEL2_THRESHOLD = new BigDecimal("100000");
 
     private final ApprovalRequestRepository approvalRepository;
     private final FundServiceClient fundServiceClient;
@@ -53,6 +56,14 @@ public class ApprovalServiceImpl implements ApprovalService {
                     "Transaction " + request.getTransactionId() + " is already submitted for approval");
         }
 
+        boolean requiresLevel2 = transaction.getAmount() != null
+                && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
+
+        if (requiresLevel2 && (request.getLevel2CheckerId() == null || request.getLevel2CheckerId().isBlank())) {
+            throw new InvalidApprovalException(
+                    "Amount is above " + LEVEL2_THRESHOLD + ". A Level 2 checker is required for approval.");
+        }
+
         CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(request.getCheckerId()));
         if (checker == null) {
             throw new ResourceNotFoundException("Checker not found with ID: " + request.getCheckerId());
@@ -65,7 +76,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new InvalidApprovalException("Checker account is not ACTIVE");
         }
 
-        if (request.getLevel2CheckerId() != null && !request.getLevel2CheckerId().isBlank()) {
+        if (requiresLevel2) {
             CustomerUserDto level2Checker = customerServiceClient.getUser(Long.valueOf(request.getLevel2CheckerId()));
             if (level2Checker == null) {
                 throw new ResourceNotFoundException("Level 2 checker not found with ID: " + request.getLevel2CheckerId());
@@ -84,7 +95,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .makerId(request.getMakerId())
                 .makerName(maker.getEmployeeName())
                 .checkerId(request.getCheckerId())
-                .level2CheckerId(request.getLevel2CheckerId())
+                .level2CheckerId(requiresLevel2 ? request.getLevel2CheckerId() : null)
                 .status(ApprovalStatus.PENDING)
                 .build();
 
