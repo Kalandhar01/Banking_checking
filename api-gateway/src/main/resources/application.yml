@@ -1,34 +1,42 @@
-server.port=3000
+server:
+  port: 3000
 
-spring.application.name=api-gateway
+spring:
+  application:
+    name: api-gateway
 
-eureka.client.service-url.defaultZone=http://localhost:8761/eureka/
+  cloud:
+    gateway:
+      routes:
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/customer-service/**
+          filters:
+            - StripPrefix=1
 
-spring.cloud.gateway.routes:
-  - id: customer-service
-    uri: lb://customer-service
-    predicates:
-      - Path=/customer-service/**
-    filters:
-      - StripPrefix=1
+        - id: fund-service
+          uri: lb://fund-service
+          predicates:
+            - Path=/fund-service/**
+          filters:
+            - StripPrefix=1
 
-  - id: fund-service
-    uri: lb://fund-service
-    predicates:
-      - Path=/fund-service/**
-    filters:
-      - StripPrefix=1
+        - id: beneficiary-service
+          uri: lb://beneficiary-service
+          predicates:
+            - Path=/beneficiary-service/**
+          filters:
+            - StripPrefix=1
 
-  - id: beneficiary-service
-    uri: lb://beneficiary-service
-    predicates:
-      - Path=/beneficiary-service/**
-    filters:
-      - StripPrefix=1
+        - id: approval-service
+          uri: lb://approval-service
+          predicates:
+            - Path=/approval-service/**
+          filters:
+            - StripPrefix=1
 
-  - id: approval-service
-    uri: lb://approval-service
-    predicates:
-      - Path=/approval-service/**
-    filters:
-      - StripPrefix=1
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

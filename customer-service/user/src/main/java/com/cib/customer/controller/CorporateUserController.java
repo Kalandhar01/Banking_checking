@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("customer/users")
+@RequestMapping("/customer/users")
 @RequiredArgsConstructor
 public class CorporateUserController {
 

@@ -13,11 +13,11 @@
 		<relativePath/>
 	</parent>
 
-	<groupId>com.CIB</groupId>
-	<artifactId>user</artifactId>
+	<groupId>com.cib</groupId>
+	<artifactId>customer-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
-	<name>user-service</name>
+	<name>customer-service</name>
 	<description>Corporate Banking User Service</description>
 
 	<properties>

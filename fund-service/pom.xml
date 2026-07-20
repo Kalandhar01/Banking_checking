@@ -13,7 +13,7 @@
 		<relativePath/>
 	</parent>
 
-	<groupId>com.CIB</groupId>
+	<groupId>com.cib</groupId>
 	<artifactId>fund-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 

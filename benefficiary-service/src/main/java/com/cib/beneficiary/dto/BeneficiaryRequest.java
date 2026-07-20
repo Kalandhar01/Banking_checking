@@ -1,6 +1,7 @@
 package com.cib.beneficiary.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 @Getter
@@ -10,7 +11,7 @@ import lombok.*;
 @Builder
 public class BeneficiaryRequest {
 
-    @NotBlank(message = "Customer ID is required")
+    @NotNull(message = "Customer ID is required")
     private Long customerId;
 
     @NotBlank(message = "Beneficiary name is required")
