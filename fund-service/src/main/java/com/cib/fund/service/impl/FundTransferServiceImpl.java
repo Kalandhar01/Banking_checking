@@ -9,7 +9,6 @@ import com.cib.fund.entity.TransactionAudit;
 import com.cib.fund.enums.TransactionStatus;
 import com.cib.fund.exception.InvalidTransactionException;
 import com.cib.fund.exception.ResourceNotFoundException;
-import com.cib.fund.feign.ApprovalServiceClient;
 import com.cib.fund.feign.BeneficiaryClient;
 import com.cib.fund.repository.FundTransactionRepository;
 import com.cib.fund.repository.TransactionAuditRepository;
@@ -18,8 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -34,7 +31,6 @@ public class FundTransferServiceImpl implements FundTransferService {
     private final FundTransactionRepository transactionRepository;
     private final TransactionAuditRepository auditRepository;
     private final BeneficiaryClient beneficiaryClient;
-    private final ApprovalServiceClient approvalServiceClient;
 
     @Override
     @Transactional
@@ -64,19 +60,6 @@ public class FundTransferServiceImpl implements FundTransferService {
 
         log.info("Transfer initiated: ref={}, amount={}, beneficiary={}",
                 transaction.getReferenceNumber(), transaction.getAmount(), transaction.getBeneficiaryName());
-
-        Long txnId = transaction.getId();
-        String initiatedBy = request.getInitiatedBy();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                try {
-                    approvalServiceClient.submitForApproval(txnId, initiatedBy);
-                } catch (Exception e) {
-                    log.warn("Approval auto-submit failed for transaction {}: {}", txnId, e.getMessage());
-                }
-            }
-        });
 
         return toResponse(transaction);
     }

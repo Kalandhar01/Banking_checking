@@ -1,6 +1,7 @@
 package com.cib.fund.controller;
 
 import com.cib.fund.dto.*;
+import com.cib.fund.feign.ApprovalServiceClient;
 import com.cib.fund.service.FundTransferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,11 +17,17 @@ import java.util.List;
 public class FundTransferController {
 
     private final FundTransferService fundTransferService;
+    private final ApprovalServiceClient approvalServiceClient;
 
     @PostMapping("/transfer")
     public ResponseEntity<ApiResponse<FundTransferResponse>> initiateTransfer(
             @Valid @RequestBody FundTransferRequest request) {
         FundTransferResponse response = fundTransferService.initiateTransfer(request);
+        try {
+            approvalServiceClient.submitForApproval(response.getId(), request.getInitiatedBy());
+        } catch (Exception e) {
+            // Logged inside client
+        }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         "Transfer initiated. Reference: " + response.getReferenceNumber() + ", ID: " + response.getId(),
