@@ -27,24 +27,24 @@ public class ApprovalController {
                         response));
     }
 
-    @PutMapping("/{id}/approve")
+    @PutMapping("/{transactionId}/{checkerId}/approve")
     public ResponseEntity<ApiResponse<ApprovalResponse>> approveTransaction(
-            @PathVariable Long id,
-            @RequestParam String checkerId) {
-        ApprovalResponse response = approvalService.approveTransaction(id, checkerId);
+            @PathVariable Long transactionId,
+            @PathVariable String checkerId) {
+        ApprovalResponse response = approvalService.approveTransactionByTxId(transactionId, checkerId);
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getTransactionId() + " approved successfully by checker " + checkerId,
+                "Transaction " + transactionId + " approved successfully by checker " + checkerId,
                 response));
     }
 
-    @PutMapping("/{id}/reject")
+    @PutMapping("/{transactionId}/{checkerId}/reject")
     public ResponseEntity<ApiResponse<ApprovalResponse>> rejectTransaction(
-            @PathVariable Long id,
-            @RequestParam String checkerId,
+            @PathVariable Long transactionId,
+            @PathVariable String checkerId,
             @RequestParam String reason) {
-        ApprovalResponse response = approvalService.rejectTransaction(id, checkerId, reason);
+        ApprovalResponse response = approvalService.rejectTransactionByTxId(transactionId, checkerId, reason);
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getTransactionId() + " rejected by checker " + checkerId + ". Reason: " + reason,
+                "Transaction " + transactionId + " rejected by checker " + checkerId + ". Reason: " + reason,
                 response));
     }
 

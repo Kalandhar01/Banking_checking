@@ -107,14 +107,19 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Override
     @Transactional
-    public ApprovalResponse approveTransaction(Long approvalId, String checkerId) {
-        ApprovalRequest approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Approval request not found with ID: " + approvalId));
+    public ApprovalResponse approveTransactionByTxId(Long transactionId, String checkerId) {
+        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction ID: " + transactionId));
 
         if (approval.getStatus() == ApprovalStatus.APPROVED
                 || approval.getStatus() == ApprovalStatus.REJECTED) {
             throw new InvalidApprovalException(
-                    "Approval is already " + approval.getStatus());
+                    "This transaction is already " + approval.getStatus());
+        }
+
+        CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(checkerId));
+        if (checker == null) {
+            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
         }
 
         boolean isLevel1 = approval.getCheckerId().equals(checkerId);
@@ -122,17 +127,17 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         if (!isLevel1 && !isLevel2) {
             throw new InvalidApprovalException(
-                    "This approval request is not assigned to checker " + checkerId);
+                    "You are not authorized to process this transaction.");
         }
 
-        if (isLevel1 && approval.getStatus() != ApprovalStatus.PENDING) {
+        if (isLevel1 && approval.getLevel2CheckerId() != null) {
             throw new InvalidApprovalException(
-                    "Level 1 approval is not in PENDING state");
+                    "Level 1 access only. Cannot approve this transaction which requires Level 2 verification.");
         }
 
-        if (isLevel2 && approval.getStatus() != ApprovalStatus.LEVEL1_APPROVED) {
+        if (approval.getStatus() != ApprovalStatus.PENDING) {
             throw new InvalidApprovalException(
-                    "Level 2 approval requires Level 1 to approve first");
+                    "Transaction is not in PENDING state. Current state: " + approval.getStatus());
         }
 
         FundTransactionDto transaction = fundServiceClient.getTransaction(approval.getTransactionId());
@@ -140,7 +145,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new ResourceNotFoundException("Transaction not found: " + approval.getTransactionId());
         }
 
-        if (isLevel1 && approval.getLevel2CheckerId() != null) {
+        if (approval.getLevel2CheckerId() != null) {
             approval.setStatus(ApprovalStatus.LEVEL1_APPROVED);
             approval = approvalRepository.save(approval);
             log.info("Transaction {} approved by Level 1 checker {}", approval.getTransactionId(), checkerId);
@@ -156,14 +161,19 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Override
     @Transactional
-    public ApprovalResponse rejectTransaction(Long approvalId, String checkerId, String reason) {
-        ApprovalRequest approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Approval request not found with ID: " + approvalId));
+    public ApprovalResponse rejectTransactionByTxId(Long transactionId, String checkerId, String reason) {
+        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction ID: " + transactionId));
 
         if (approval.getStatus() == ApprovalStatus.APPROVED
                 || approval.getStatus() == ApprovalStatus.REJECTED) {
             throw new InvalidApprovalException(
-                    "Approval is already " + approval.getStatus());
+                    "This transaction is already " + approval.getStatus());
+        }
+
+        CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(checkerId));
+        if (checker == null) {
+            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
         }
 
         boolean isLevel1 = approval.getCheckerId().equals(checkerId);
@@ -171,7 +181,12 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         if (!isLevel1 && !isLevel2) {
             throw new InvalidApprovalException(
-                    "This approval request is not assigned to checker " + checkerId);
+                    "You are not authorized to process this transaction.");
+        }
+
+        if (isLevel1 && approval.getLevel2CheckerId() != null) {
+            throw new InvalidApprovalException(
+                    "Level 1 access only. Cannot reject this transaction which requires Level 2 verification.");
         }
 
         fundServiceClient.rejectTransaction(approval.getTransactionId(), checkerId, reason);

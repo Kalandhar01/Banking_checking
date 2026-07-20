@@ -8,8 +8,8 @@ import java.util.List;
 
 public interface ApprovalService {
     ApprovalResponse submitForApproval(ApprovalRequestDto request);
-    ApprovalResponse approveTransaction(Long approvalId, String checkerId);
-    ApprovalResponse rejectTransaction(Long approvalId, String checkerId, String reason);
+    ApprovalResponse approveTransactionByTxId(Long transactionId, String checkerId);
+    ApprovalResponse rejectTransactionByTxId(Long transactionId, String checkerId, String reason);
     List<ApprovalResponse> getPendingApprovals();
     List<ApprovalResponse> getApprovalsByChecker(String checkerId);
     ApprovalResponse getApprovalById(Long id);
