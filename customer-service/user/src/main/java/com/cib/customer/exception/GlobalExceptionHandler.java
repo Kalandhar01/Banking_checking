@@ -40,6 +40,17 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
+    @ExceptionHandler(InactiveAccountException.class)
+    public ResponseEntity<ApiResponse<Object>> handleInactiveAccount(
+            InactiveAccountException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.builder()
+                        .success(false)
+                        .message(ex.getMessage())
+                        .data(null)
+                        .build());
+    }
+
     @ExceptionHandler(InsufficientBalanceException.class)
     public ResponseEntity<ApiResponse<Object>> handleInsufficientBalance(
             InsufficientBalanceException ex) {

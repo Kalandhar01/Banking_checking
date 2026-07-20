@@ -1,6 +1,7 @@
 package com.cib.approval.service.impl;
 
 import com.cib.approval.dto.*;
+import com.cib.approval.exception.ApprovalFailedException;
 import com.cib.approval.exception.InvalidApprovalException;
 import com.cib.approval.exception.ResourceNotFoundException;
 import com.cib.approval.feign.BeneficiaryClient;
@@ -46,7 +47,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
             FundTransactionDto approved = fundServiceClient.approveTransaction(transactionId, req.getCheckerId());
             if (approved == null) {
-                throw new RuntimeException("Approval failed for transaction " + transactionId);
+                throw new ApprovalFailedException("Approval failed for transaction " + transactionId);
             }
             executeDebitAndComplete(transactionId, transaction.getUserId(),
                     transaction.getAmount(), transaction.getReferenceNumber(), req.getCheckerId());

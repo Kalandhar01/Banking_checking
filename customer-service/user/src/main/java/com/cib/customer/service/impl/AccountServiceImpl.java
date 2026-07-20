@@ -6,6 +6,7 @@ import com.cib.customer.dto.ApiResponse;
 import com.cib.customer.entity.CorporateAccount;
 import com.cib.customer.entity.CorporateUser;
 import com.cib.customer.enums.Status;
+import com.cib.customer.exception.InactiveAccountException;
 import com.cib.customer.exception.InsufficientBalanceException;
 import com.cib.customer.exception.ResourceNotFoundException;
 import com.cib.customer.repository.CorporateAccountRepository;
@@ -47,7 +48,7 @@ public class AccountServiceImpl implements AccountService {
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
 
         if (account.getStatus() != Status.ACTIVE) {
-            throw new InsufficientBalanceException("Account is not ACTIVE. Current status: " + account.getStatus());
+            throw new InactiveAccountException("Account is not ACTIVE. Current status: " + account.getStatus());
         }
 
         if (account.getBalance().compareTo(request.getAmount()) < 0) {
@@ -76,7 +77,7 @@ public class AccountServiceImpl implements AccountService {
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found with ID: " + accountId));
 
         if (account.getStatus() != Status.ACTIVE) {
-            throw new InsufficientBalanceException("Account is not ACTIVE. Current status: " + account.getStatus());
+            throw new InactiveAccountException("Account is not ACTIVE. Current status: " + account.getStatus());
         }
 
         account.setBalance(account.getBalance().add(request.getAmount()));
