@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 @Builder
 public class FundTransferResponse {
     private Long id;
+    private Long userId;
     private Long customerId;
     private Long beneficiaryId;
     private String beneficiaryAccount;

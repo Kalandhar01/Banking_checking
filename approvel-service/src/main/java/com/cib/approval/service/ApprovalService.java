@@ -14,4 +14,5 @@ public interface ApprovalService {
     List<ApprovalResponse> getApprovalsByChecker(String checkerId);
     ApprovalResponse getApprovalById(Long id);
     FundTransactionDto getTransactionDetails(Long transactionId);
+    List<ApprovalResponse> getApprovalsByCheckerLevel(String level);
 }

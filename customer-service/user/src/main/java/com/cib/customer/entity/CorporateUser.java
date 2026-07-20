@@ -1,6 +1,7 @@
 package com.cib.customer.entity;
 
 
+import com.cib.customer.enums.CheckerLevel;
 import com.cib.customer.enums.Role;
 import com.cib.customer.enums.Status;
 import jakarta.persistence.*;
@@ -30,6 +31,9 @@ public class CorporateUser {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
+
+    @Enumerated(EnumType.STRING)
+    private CheckerLevel checkerLevel;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

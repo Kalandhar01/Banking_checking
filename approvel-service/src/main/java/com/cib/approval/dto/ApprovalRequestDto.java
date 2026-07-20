@@ -21,4 +21,9 @@ public class ApprovalRequestDto {
 
     @NotBlank(message = "Checker ID is required")
     private String checkerId;
+
+    @NotBlank(message = "Checker level is required")
+    private String checkerLevel;
+
+    private String level2CheckerId;
 }

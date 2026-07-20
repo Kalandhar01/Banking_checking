@@ -48,6 +48,11 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new InvalidApprovalException("Maker account is not ACTIVE");
         }
 
+        if (approvalRepository.findByTransactionId(request.getTransactionId()).isPresent()) {
+            throw new InvalidApprovalException(
+                    "Transaction " + request.getTransactionId() + " is already submitted for approval");
+        }
+
         CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(request.getCheckerId()));
         if (checker == null) {
             throw new ResourceNotFoundException("Checker not found with ID: " + request.getCheckerId());
@@ -60,9 +65,18 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new InvalidApprovalException("Checker account is not ACTIVE");
         }
 
-        if (approvalRepository.findByTransactionId(request.getTransactionId()).isPresent()) {
-            throw new InvalidApprovalException(
-                    "Transaction " + request.getTransactionId() + " is already submitted for approval");
+        if (request.getLevel2CheckerId() != null && !request.getLevel2CheckerId().isBlank()) {
+            CustomerUserDto level2Checker = customerServiceClient.getUser(Long.valueOf(request.getLevel2CheckerId()));
+            if (level2Checker == null) {
+                throw new ResourceNotFoundException("Level 2 checker not found with ID: " + request.getLevel2CheckerId());
+            }
+            if (!"CHECKER".equalsIgnoreCase(level2Checker.getRole())) {
+                throw new InvalidApprovalException(
+                        "User " + request.getLevel2CheckerId() + " is not a CHECKER.");
+            }
+            if (!"ACTIVE".equalsIgnoreCase(level2Checker.getStatus())) {
+                throw new InvalidApprovalException("Level 2 checker account is not ACTIVE");
+            }
         }
 
         ApprovalRequest approval = ApprovalRequest.builder()
@@ -70,6 +84,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .makerId(request.getMakerId())
                 .makerName(maker.getEmployeeName())
                 .checkerId(request.getCheckerId())
+                .level2CheckerId(request.getLevel2CheckerId())
                 .status(ApprovalStatus.PENDING)
                 .build();
 
@@ -85,30 +100,46 @@ public class ApprovalServiceImpl implements ApprovalService {
         ApprovalRequest approval = approvalRepository.findById(approvalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval request not found with ID: " + approvalId));
 
-        if (approval.getStatus() != ApprovalStatus.PENDING) {
+        if (approval.getStatus() == ApprovalStatus.APPROVED
+                || approval.getStatus() == ApprovalStatus.REJECTED) {
             throw new InvalidApprovalException(
-                    "Only PENDING approvals can be approved. Current status: " + approval.getStatus());
+                    "Approval is already " + approval.getStatus());
         }
-        if (!approval.getCheckerId().equals(checkerId)) {
+
+        boolean isLevel1 = approval.getCheckerId().equals(checkerId);
+        boolean isLevel2 = approval.getLevel2CheckerId() != null && approval.getLevel2CheckerId().equals(checkerId);
+
+        if (!isLevel1 && !isLevel2) {
             throw new InvalidApprovalException(
-                    "This approval request is assigned to checker " + approval.getCheckerId());
+                    "This approval request is not assigned to checker " + checkerId);
+        }
+
+        if (isLevel1 && approval.getStatus() != ApprovalStatus.PENDING) {
+            throw new InvalidApprovalException(
+                    "Level 1 approval is not in PENDING state");
+        }
+
+        if (isLevel2 && approval.getStatus() != ApprovalStatus.LEVEL1_APPROVED) {
+            throw new InvalidApprovalException(
+                    "Level 2 approval requires Level 1 to approve first");
         }
 
         FundTransactionDto transaction = fundServiceClient.getTransaction(approval.getTransactionId());
         if (transaction == null) {
             throw new ResourceNotFoundException("Transaction not found: " + approval.getTransactionId());
         }
-        if (!"PENDING".equalsIgnoreCase(transaction.getStatus()) && !"MODIFIED".equalsIgnoreCase(transaction.getStatus())) {
-            throw new InvalidApprovalException(
-                    "Transaction is not in a state that can be approved. Current status: " + transaction.getStatus());
+
+        if (isLevel1 && approval.getLevel2CheckerId() != null) {
+            approval.setStatus(ApprovalStatus.LEVEL1_APPROVED);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} approved by Level 1 checker {}", approval.getTransactionId(), checkerId);
+        } else {
+            fundServiceClient.approveTransaction(approval.getTransactionId(), checkerId);
+            approval.setStatus(ApprovalStatus.APPROVED);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} fully approved by checker {}", approval.getTransactionId(), checkerId);
         }
 
-        fundServiceClient.approveTransaction(approval.getTransactionId(), checkerId);
-
-        approval.setStatus(ApprovalStatus.APPROVED);
-        approval = approvalRepository.save(approval);
-
-        log.info("Transaction {} approved by checker {}", approval.getTransactionId(), checkerId);
         return approvalMapper.toResponse(approval);
     }
 
@@ -118,13 +149,18 @@ public class ApprovalServiceImpl implements ApprovalService {
         ApprovalRequest approval = approvalRepository.findById(approvalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Approval request not found with ID: " + approvalId));
 
-        if (approval.getStatus() != ApprovalStatus.PENDING) {
+        if (approval.getStatus() == ApprovalStatus.APPROVED
+                || approval.getStatus() == ApprovalStatus.REJECTED) {
             throw new InvalidApprovalException(
-                    "Only PENDING approvals can be rejected. Current status: " + approval.getStatus());
+                    "Approval is already " + approval.getStatus());
         }
-        if (!approval.getCheckerId().equals(checkerId)) {
+
+        boolean isLevel1 = approval.getCheckerId().equals(checkerId);
+        boolean isLevel2 = approval.getLevel2CheckerId() != null && approval.getLevel2CheckerId().equals(checkerId);
+
+        if (!isLevel1 && !isLevel2) {
             throw new InvalidApprovalException(
-                    "This approval request is assigned to checker " + approval.getCheckerId());
+                    "This approval request is not assigned to checker " + checkerId);
         }
 
         fundServiceClient.rejectTransaction(approval.getTransactionId(), checkerId, reason);
@@ -139,7 +175,8 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Override
     public List<ApprovalResponse> getPendingApprovals() {
-        return approvalRepository.findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING)
+        return approvalRepository.findByStatusInOrderByCreatedAtDesc(
+                        List.of(ApprovalStatus.PENDING, ApprovalStatus.LEVEL1_APPROVED))
                 .stream()
                 .map(approvalMapper::toResponse)
                 .toList();
@@ -147,7 +184,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Override
     public List<ApprovalResponse> getApprovalsByChecker(String checkerId) {
-        return approvalRepository.findByCheckerIdOrderByCreatedAtDesc(checkerId)
+        return approvalRepository.findByCheckerIdOrLevel2CheckerIdOrderByCreatedAtDesc(checkerId, checkerId)
                 .stream()
                 .map(approvalMapper::toResponse)
                 .toList();
@@ -167,5 +204,20 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new ResourceNotFoundException("Transaction not found with ID: " + transactionId);
         }
         return transaction;
+    }
+
+    @Override
+    public List<ApprovalResponse> getApprovalsByCheckerLevel(String level) {
+        if ("LEVEL_1".equals(level)) {
+            return approvalRepository.findByCheckerIdIsNotNullOrderByCreatedAtDesc()
+                    .stream()
+                    .map(approvalMapper::toResponse)
+                    .toList();
+        } else {
+            return approvalRepository.findByLevel2CheckerIdIsNotNullOrderByCreatedAtDesc()
+                    .stream()
+                    .map(approvalMapper::toResponse)
+                    .toList();
+        }
     }
 }

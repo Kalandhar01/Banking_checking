@@ -11,6 +11,9 @@ import java.util.Optional;
 @Repository
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, Long> {
     List<ApprovalRequest> findByStatusOrderByCreatedAtDesc(ApprovalStatus status);
-    List<ApprovalRequest> findByCheckerIdOrderByCreatedAtDesc(String checkerId);
+    List<ApprovalRequest> findByStatusInOrderByCreatedAtDesc(List<ApprovalStatus> statuses);
+    List<ApprovalRequest> findByCheckerIdOrLevel2CheckerIdOrderByCreatedAtDesc(String checkerId, String level2CheckerId);
+    List<ApprovalRequest> findByCheckerIdIsNotNullOrderByCreatedAtDesc();
+    List<ApprovalRequest> findByLevel2CheckerIdIsNotNullOrderByCreatedAtDesc();
     Optional<ApprovalRequest> findByTransactionId(Long transactionId);
 }

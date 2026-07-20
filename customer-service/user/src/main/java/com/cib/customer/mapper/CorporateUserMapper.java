@@ -24,6 +24,7 @@ public class CorporateUserMapper {
                 .email(request.getEmail())
                 .password(request.getPassword())
                 .role(request.getRole())
+                .checkerLevel(request.getCheckerLevel())
                 .status(Status.ACTIVE)
                 .corporateCustomer(customer)
                 .corporateAccount(account)
@@ -37,6 +38,7 @@ public class CorporateUserMapper {
                 .employeeName(user.getEmployeeName())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .checkerLevel(user.getCheckerLevel())
                 .status(user.getStatus())
                 .customerId(user.getCorporateCustomer().getId())
                 .companyName(user.getCorporateCustomer().getCompanyName())
@@ -57,6 +59,7 @@ public class CorporateUserMapper {
         user.setEmail(request.getEmail());
         user.setPassword(request.getPassword());
         user.setRole(request.getRole());
+        user.setCheckerLevel(request.getCheckerLevel());
         user.setCorporateCustomer(customer);
 
         user.getCorporateAccount().setAccountNumber(request.getAccountNumber());

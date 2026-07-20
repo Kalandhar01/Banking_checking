@@ -46,6 +46,7 @@ public class FundTransferServiceImpl implements FundTransferService {
         }
 
         FundTransaction transaction = FundTransaction.builder()
+                .userId(request.getUserId())
                 .customerId(request.getCustomerId())
                 .beneficiaryId(request.getBeneficiaryId())
                 .beneficiaryAccount(request.getBeneficiaryAccount())
@@ -218,6 +219,7 @@ public class FundTransferServiceImpl implements FundTransferService {
     private FundTransferResponse toResponse(FundTransaction txn) {
         return FundTransferResponse.builder()
                 .id(txn.getId())
+                .userId(txn.getUserId())
                 .customerId(txn.getCustomerId())
                 .beneficiaryId(txn.getBeneficiaryId())
                 .beneficiaryAccount(txn.getBeneficiaryAccount())

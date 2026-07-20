@@ -14,6 +14,7 @@ public class ApprovalMapper {
                 .makerId(approval.getMakerId())
                 .makerName(approval.getMakerName())
                 .checkerId(approval.getCheckerId())
+                .level2CheckerId(approval.getLevel2CheckerId())
                 .status(approval.getStatus())
                 .comments(approval.getComments())
                 .createdAt(approval.getCreatedAt())

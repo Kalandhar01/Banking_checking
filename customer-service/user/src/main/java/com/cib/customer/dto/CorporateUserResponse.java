@@ -1,6 +1,7 @@
 package com.cib.customer.dto;
 
 import com.cib.customer.enums.AccountType;
+import com.cib.customer.enums.CheckerLevel;
 import com.cib.customer.enums.Role;
 import com.cib.customer.enums.Status;
 import lombok.Builder;
@@ -19,6 +20,8 @@ public class CorporateUserResponse {
     private String email;
 
     private Role role;
+
+    private CheckerLevel checkerLevel;
 
     private Status status;
 

@@ -29,6 +29,8 @@ public class ApprovalRequest {
     @Column(nullable = false)
     private String checkerId;
 
+    private String level2CheckerId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ApprovalStatus status;

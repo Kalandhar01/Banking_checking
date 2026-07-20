@@ -1,6 +1,7 @@
 package com.cib.customer.dto;
 
 import com.cib.customer.enums.AccountType;
+import com.cib.customer.enums.CheckerLevel;
 import com.cib.customer.enums.Role;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
@@ -25,6 +26,8 @@ public class CorporateUserRequest {
 
     @NotNull(message = "Role is required")
     private Role role;
+
+    private CheckerLevel checkerLevel;
 
     @NotNull(message = "Customer Id is required")
     private Long customerId;

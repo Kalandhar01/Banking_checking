@@ -20,6 +20,9 @@ public class FundTransaction {
     private Long id;
 
     @Column(nullable = false)
+    private Long userId;
+
+    @Column(nullable = false)
     private Long customerId;
 
     @Column(nullable = false)

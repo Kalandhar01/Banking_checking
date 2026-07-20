@@ -13,6 +13,9 @@ import java.math.BigDecimal;
 @Builder
 public class FundTransferRequest {
 
+    @NotNull(message = "User ID is required")
+    private Long userId;
+
     @NotNull(message = "Customer ID is required")
     private Long customerId;
 

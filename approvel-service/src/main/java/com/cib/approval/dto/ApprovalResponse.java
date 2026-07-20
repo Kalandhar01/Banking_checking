@@ -15,6 +15,7 @@ public class ApprovalResponse {
     private String makerId;
     private String makerName;
     private String checkerId;
+    private String level2CheckerId;
     private ApprovalStatus status;
     private String comments;
     private LocalDateTime createdAt;

@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 @Builder
 public class FundTransactionDto {
     private Long id;
+    private Long userId;
     private Long customerId;
     private Long beneficiaryId;
     private String beneficiaryAccount;

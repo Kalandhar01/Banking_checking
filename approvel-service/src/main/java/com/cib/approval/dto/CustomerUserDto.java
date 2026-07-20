@@ -12,5 +12,6 @@ public class CustomerUserDto {
     private String employeeName;
     private String email;
     private String role;
+    private String checkerLevel;
     private String status;
 }

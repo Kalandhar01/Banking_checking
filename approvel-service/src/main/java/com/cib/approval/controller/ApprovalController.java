@@ -81,4 +81,14 @@ public class ApprovalController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Transaction " + transactionId + " details retrieved", response));
     }
+
+    @GetMapping("/level/{level}")
+    public ResponseEntity<ApiResponse<List<ApprovalResponse>>> getApprovalsByLevel(
+            @PathVariable String level) {
+        List<ApprovalResponse> response = approvalService.getApprovalsByCheckerLevel(level);
+        String message = response.isEmpty()
+                ? "No approvals found for level " + level
+                : "Approvals retrieved for level " + level + ". Count: " + response.size();
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
 }
