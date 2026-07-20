@@ -19,6 +19,15 @@ public class BeneficiaryController {
 
     private final BeneficiaryService beneficiaryService;
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<BeneficiaryResponse>>> getAllBeneficiaries() {
+        List<BeneficiaryResponse> response = beneficiaryService.getAllBeneficiaries();
+        String message = response.isEmpty()
+                ? "No beneficiaries found"
+                : "Beneficiaries retrieved successfully. Count: " + response.size();
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponse<BeneficiaryResponse>> addBeneficiary(
             @Valid @RequestBody BeneficiaryRequest request) {

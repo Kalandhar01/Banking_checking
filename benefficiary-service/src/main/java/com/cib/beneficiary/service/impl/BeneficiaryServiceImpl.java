@@ -83,6 +83,14 @@ public class BeneficiaryServiceImpl implements BeneficiaryService {
     }
 
     @Override
+    public List<BeneficiaryResponse> getAllBeneficiaries() {
+        return beneficiaryRepository.findAll()
+                .stream()
+                .map(BeneficiaryMapper::toResponse)
+                .toList();
+    }
+
+    @Override
     public List<BeneficiaryResponse> getBeneficiariesByCustomerId(Long customerId) {
         return beneficiaryRepository.findByCustomerId(customerId)
                 .stream()

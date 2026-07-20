@@ -10,6 +10,7 @@ public interface BeneficiaryService {
     BeneficiaryResponse updateBeneficiary(Long id, BeneficiaryRequest request);
     void deleteBeneficiary(Long id);
     BeneficiaryResponse getBeneficiaryById(Long id);
+    List<BeneficiaryResponse> getAllBeneficiaries();
     List<BeneficiaryResponse> getBeneficiariesByCustomerId(Long customerId);
     boolean validateBeneficiary(Long beneficiaryId);
 }
