@@ -27,27 +27,6 @@ public class ApprovalController {
                         response));
     }
 
-    @PutMapping("/{transactionId}/{checkerId}/approve")
-    public ResponseEntity<ApiResponse<ApprovalResponse>> approveTransaction(
-            @PathVariable Long transactionId,
-            @PathVariable String checkerId) {
-        ApprovalResponse response = approvalService.approveTransactionByTxId(transactionId, checkerId);
-        return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + transactionId + " approved successfully by checker " + checkerId,
-                response));
-    }
-
-    @PutMapping("/{transactionId}/{checkerId}/reject")
-    public ResponseEntity<ApiResponse<ApprovalResponse>> rejectTransaction(
-            @PathVariable Long transactionId,
-            @PathVariable String checkerId,
-            @Valid @RequestBody RejectRequest request) {
-        ApprovalResponse response = approvalService.rejectTransactionByTxId(transactionId, checkerId, request.getRemarks());
-        return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + transactionId + " rejected by checker " + checkerId + ". Reason: " + request.getRemarks(),
-                response));
-    }
-
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<ApprovalResponse>>> getPendingApprovals() {
         List<ApprovalResponse> response = approvalService.getPendingApprovals();
@@ -55,6 +34,46 @@ public class ApprovalController {
                 ? "No pending approvals found"
                 : "Pending approvals retrieved. Count: " + response.size();
         return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @GetMapping("/pending/level-1")
+    public ResponseEntity<ApiResponse<List<ApprovalResponse>>> getPendingLevel1() {
+        List<ApprovalResponse> response = approvalService.getPendingLevel1();
+        String message = response.isEmpty()
+                ? "No Level 1 pending approvals found"
+                : "Level 1 pending approvals retrieved. Count: " + response.size();
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @GetMapping("/pending/level-2")
+    public ResponseEntity<ApiResponse<List<ApprovalResponse>>> getPendingLevel2() {
+        List<ApprovalResponse> response = approvalService.getPendingLevel2();
+        String message = response.isEmpty()
+                ? "No Level 2 pending approvals found"
+                : "Level 2 pending approvals retrieved. Count: " + response.size();
+        return ResponseEntity.ok(ApiResponse.success(message, response));
+    }
+
+    @PutMapping("/level-1/{transactionId}")
+    public ResponseEntity<ApiResponse<ApprovalResponse>> actLevel1(
+            @PathVariable Long transactionId,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        ApprovalResponse response = approvalService.actLevel1(transactionId, request);
+        String msg = "ACCEPT".equalsIgnoreCase(request.getAction())
+                ? "Transaction " + transactionId + " accepted by Level 1 checker " + request.getCheckerId()
+                : "Transaction " + transactionId + " rejected by Level 1 checker " + request.getCheckerId();
+        return ResponseEntity.ok(ApiResponse.success(msg, response));
+    }
+
+    @PutMapping("/level-2/{transactionId}")
+    public ResponseEntity<ApiResponse<ApprovalResponse>> actLevel2(
+            @PathVariable Long transactionId,
+            @Valid @RequestBody ApprovalActionRequest request) {
+        ApprovalResponse response = approvalService.actLevel2(transactionId, request);
+        String msg = "ACCEPT".equalsIgnoreCase(request.getAction())
+                ? "Transaction " + transactionId + " accepted by Level 2 checker " + request.getCheckerId()
+                : "Transaction " + transactionId + " rejected by Level 2 checker " + request.getCheckerId();
+        return ResponseEntity.ok(ApiResponse.success(msg, response));
     }
 
     @GetMapping("/checker/{checkerId}")

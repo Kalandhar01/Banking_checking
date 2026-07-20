@@ -56,138 +56,172 @@ public class ApprovalServiceImpl implements ApprovalService {
                     "Transaction " + request.getTransactionId() + " is already submitted for approval");
         }
 
-        createApproval(request.getTransactionId(), request.getMakerId(), maker.getEmployeeName(),
-                transaction.getAmount());
-        return approvalMapper.toResponse(approvalRepository
-                .findByTransactionId(request.getTransactionId())
-                .orElseThrow());
-    }
-
-    @Override
-    @Transactional
-    public ApprovalResponse approveTransactionByTxId(Long transactionId, String checkerId) {
-        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction: " + transactionId));
-
-        if (approval.getStatus() == ApprovalStatus.APPROVED
-                || approval.getStatus() == ApprovalStatus.REJECTED) {
-            throw new InvalidApprovalException(
-                    "This transaction is already " + approval.getStatus());
-        }
-
-        CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(checkerId));
-        if (checker == null) {
-            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
-        }
-        if (!"CHECKER".equalsIgnoreCase(checker.getRole())) {
-            throw new InvalidApprovalException("User " + checkerId + " is not a CHECKER.");
-        }
-        if (!"ACTIVE".equalsIgnoreCase(checker.getStatus())) {
-            throw new InvalidApprovalException("Checker account is not ACTIVE");
-        }
-
-        FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
-        if (transaction == null) {
-            throw new ResourceNotFoundException("Transaction not found: " + transactionId);
-        }
-
         boolean requiresLevel2 = transaction.getAmount() != null
                 && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
-        boolean isLevel2 = "LEVEL_2".equalsIgnoreCase(checker.getCheckerLevel());
 
-        if (requiresLevel2 && !isLevel2 && approval.getStatus() == ApprovalStatus.PENDING) {
-            throw new InvalidApprovalException(
-                    "Level 1 access only. Cannot approve this transaction which requires Level 2 verification.");
-        }
+        ApprovalRequest approval = ApprovalRequest.builder()
+                .transactionId(request.getTransactionId())
+                .makerId(request.getMakerId())
+                .makerName(maker.getEmployeeName())
+                .level2CheckerId(requiresLevel2 ? "REQUIRED" : null)
+                .status(ApprovalStatus.PENDING)
+                .build();
 
-        if (requiresLevel2 && !isLevel2) {
-            approval.setStatus(ApprovalStatus.LEVEL1_APPROVED);
-            approval = approvalRepository.save(approval);
-            log.info("Transaction {} approved by Level 1 checker {}", transactionId, checkerId);
-        } else {
-            AccountResponse account = customerServiceClient.getAccountByUserId(transaction.getUserId());
-            if (account == null) {
-                fundServiceClient.failTransaction(transactionId, checkerId, "Failed to fetch customer account");
-                approval.setStatus(ApprovalStatus.FAILED);
-                approval = approvalRepository.save(approval);
-                log.info("Transaction {} failed: unable to fetch account", transactionId);
-                return approvalMapper.toResponse(approval);
-            }
-
-            AccountTransactionRequest debitRequest = AccountTransactionRequest.builder()
-                    .amount(transaction.getAmount())
-                    .reference(transaction.getReferenceNumber())
-                    .build();
-
-            AccountResponse debitResult = customerServiceClient.debitAccount(account.getId(), debitRequest);
-            if (debitResult == null) {
-                fundServiceClient.failTransaction(transactionId, checkerId, "Debit failed");
-                approval.setStatus(ApprovalStatus.FAILED);
-                approval = approvalRepository.save(approval);
-                log.info("Transaction {} failed: debit failed", transactionId);
-                return approvalMapper.toResponse(approval);
-            }
-
-            fundServiceClient.completeTransaction(transactionId, checkerId);
-            approval.setStatus(ApprovalStatus.APPROVED);
-            approval = approvalRepository.save(approval);
-            log.info("Transaction {} fully approved by checker {}", transactionId, checkerId);
-        }
-
-        return approvalMapper.toResponse(approval);
-    }
-
-    @Override
-    @Transactional
-    public ApprovalResponse rejectTransactionByTxId(Long transactionId, String checkerId, String reason) {
-        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction: " + transactionId));
-
-        if (approval.getStatus() == ApprovalStatus.APPROVED
-                || approval.getStatus() == ApprovalStatus.REJECTED) {
-            throw new InvalidApprovalException(
-                    "This transaction is already " + approval.getStatus());
-        }
-
-        CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(checkerId));
-        if (checker == null) {
-            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
-        }
-        if (!"CHECKER".equalsIgnoreCase(checker.getRole())) {
-            throw new InvalidApprovalException("User " + checkerId + " is not a CHECKER.");
-        }
-        if (!"ACTIVE".equalsIgnoreCase(checker.getStatus())) {
-            throw new InvalidApprovalException("Checker account is not ACTIVE");
-        }
-
-        FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
-        if (transaction == null) {
-            throw new ResourceNotFoundException("Transaction not found: " + transactionId);
-        }
-
-        boolean requiresLevel2 = transaction.getAmount() != null
-                && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
-        boolean isLevel2 = "LEVEL_2".equalsIgnoreCase(checker.getCheckerLevel());
-
-        if (requiresLevel2 && !isLevel2) {
-            throw new InvalidApprovalException(
-                    "Level 1 access only. Cannot reject this transaction which requires Level 2 verification.");
-        }
-
-        fundServiceClient.rejectTransaction(transactionId, checkerId, reason);
-
-        approval.setStatus(ApprovalStatus.REJECTED);
-        approval.setComments(reason);
         approval = approvalRepository.save(approval);
+        log.info("Approval auto-created for transaction {} by maker {}. Level2: {}",
+                request.getTransactionId(), request.getMakerId(), requiresLevel2);
 
-        log.info("Transaction {} rejected by checker {}. Reason: {}", transactionId, checkerId, reason);
         return approvalMapper.toResponse(approval);
+    }
+
+    @Override
+    @Transactional
+    public ApprovalResponse actLevel1(Long transactionId, ApprovalActionRequest req) {
+        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction: " + transactionId));
+
+        if (approval.getStatus() != ApprovalStatus.PENDING) {
+            throw new InvalidApprovalException(
+                    "Transaction is not in PENDING state. Current state: " + approval.getStatus());
+        }
+
+        CustomerUserDto checker = validateChecker(req.getCheckerId());
+        if (!"LEVEL_1".equalsIgnoreCase(checker.getCheckerLevel())) {
+            throw new InvalidApprovalException("Only LEVEL_1 checkers can use this endpoint.");
+        }
+
+        FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
+        if (transaction == null) {
+            throw new ResourceNotFoundException("Transaction not found: " + transactionId);
+        }
+
+        boolean requiresLevel2 = transaction.getAmount() != null
+                && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
+
+        if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
+            if (requiresLevel2) {
+                approval.setStatus(ApprovalStatus.LEVEL1_APPROVED);
+                approval = approvalRepository.save(approval);
+                log.info("Transaction {} Level 1 approved by checker {}", transactionId, req.getCheckerId());
+            } else {
+                executeFinalApproval(approval, transaction, req.getCheckerId());
+            }
+        } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 1 checker";
+            fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), reason);
+            approval.setStatus(ApprovalStatus.REJECTED);
+            approval.setComments(reason);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} rejected by Level 1 checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
+        } else {
+            throw new InvalidApprovalException("Invalid action. Must be ACCEPT or REJECT.");
+        }
+
+        return approvalMapper.toResponse(approval);
+    }
+
+    @Override
+    @Transactional
+    public ApprovalResponse actLevel2(Long transactionId, ApprovalActionRequest req) {
+        ApprovalRequest approval = approvalRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("No approval request found for transaction: " + transactionId));
+
+        if (approval.getStatus() != ApprovalStatus.LEVEL1_APPROVED) {
+            throw new InvalidApprovalException(
+                    "Transaction must be in LEVEL1_APPROVED state. Current state: " + approval.getStatus());
+        }
+
+        CustomerUserDto checker = validateChecker(req.getCheckerId());
+        if (!"LEVEL_2".equalsIgnoreCase(checker.getCheckerLevel())) {
+            throw new InvalidApprovalException("Only LEVEL_2 checkers can use this endpoint.");
+        }
+
+        FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
+        if (transaction == null) {
+            throw new ResourceNotFoundException("Transaction not found: " + transactionId);
+        }
+
+        if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
+            executeFinalApproval(approval, transaction, req.getCheckerId());
+        } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 2 checker";
+            fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), reason);
+            approval.setStatus(ApprovalStatus.REJECTED);
+            approval.setComments(reason);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} rejected by Level 2 checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
+        } else {
+            throw new InvalidApprovalException("Invalid action. Must be ACCEPT or REJECT.");
+        }
+
+        return approvalMapper.toResponse(approval);
+    }
+
+    private void executeFinalApproval(ApprovalRequest approval, FundTransactionDto transaction, String checkerId) {
+        Long transactionId = transaction.getId();
+        AccountResponse account = customerServiceClient.getAccountByUserId(transaction.getUserId());
+        if (account == null) {
+            fundServiceClient.failTransaction(transactionId, checkerId, "Failed to fetch customer account");
+            approval.setStatus(ApprovalStatus.FAILED);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} failed: unable to fetch account", transactionId);
+            return;
+        }
+
+        AccountTransactionRequest debitRequest = AccountTransactionRequest.builder()
+                .amount(transaction.getAmount())
+                .reference(transaction.getReferenceNumber())
+                .build();
+
+        AccountResponse debitResult = customerServiceClient.debitAccount(account.getId(), debitRequest);
+        if (debitResult == null) {
+            fundServiceClient.failTransaction(transactionId, checkerId, "Debit failed");
+            approval.setStatus(ApprovalStatus.FAILED);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} failed: debit failed", transactionId);
+            return;
+        }
+
+        fundServiceClient.completeTransaction(transactionId, checkerId);
+        approval.setStatus(ApprovalStatus.APPROVED);
+        approval = approvalRepository.save(approval);
+        log.info("Transaction {} fully approved by checker {}", transactionId, checkerId);
+    }
+
+    private CustomerUserDto validateChecker(String checkerId) {
+        CustomerUserDto checker = customerServiceClient.getUser(Long.valueOf(checkerId));
+        if (checker == null) {
+            throw new ResourceNotFoundException("Checker not found with ID: " + checkerId);
+        }
+        if (!"CHECKER".equalsIgnoreCase(checker.getRole())) {
+            throw new InvalidApprovalException("User " + checkerId + " is not a CHECKER.");
+        }
+        if (!"ACTIVE".equalsIgnoreCase(checker.getStatus())) {
+            throw new InvalidApprovalException("Checker account is not ACTIVE");
+        }
+        return checker;
     }
 
     @Override
     public List<ApprovalResponse> getPendingApprovals() {
         return approvalRepository.findByStatusInOrderByCreatedAtDesc(
                         List.of(ApprovalStatus.PENDING, ApprovalStatus.LEVEL1_APPROVED))
+                .stream()
+                .map(approvalMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<ApprovalResponse> getPendingLevel1() {
+        return approvalRepository.findByStatusOrderByCreatedAtDesc(ApprovalStatus.PENDING)
+                .stream()
+                .map(approvalMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    public List<ApprovalResponse> getPendingLevel2() {
+        return approvalRepository.findByStatusOrderByCreatedAtDesc(ApprovalStatus.LEVEL1_APPROVED)
                 .stream()
                 .map(approvalMapper::toResponse)
                 .toList();
@@ -230,24 +264,5 @@ public class ApprovalServiceImpl implements ApprovalService {
                     .map(approvalMapper::toResponse)
                     .toList();
         }
-    }
-
-    private ApprovalRequest createApproval(Long transactionId, String makerId,
-                                            String makerName, BigDecimal amount) {
-        boolean requiresLevel2 = amount != null
-                && amount.compareTo(LEVEL2_THRESHOLD) >= 0;
-
-        ApprovalRequest approval = ApprovalRequest.builder()
-                .transactionId(transactionId)
-                .makerId(makerId)
-                .makerName(makerName)
-                .level2CheckerId(requiresLevel2 ? "REQUIRED" : null)
-                .status(ApprovalStatus.PENDING)
-                .build();
-
-        approval = approvalRepository.save(approval);
-        log.info("Approval auto-created for transaction {} by maker {}. Level2: {}",
-                transactionId, makerId, requiresLevel2);
-        return approval;
     }
 }
