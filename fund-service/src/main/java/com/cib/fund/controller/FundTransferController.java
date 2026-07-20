@@ -1,6 +1,7 @@
 package com.cib.fund.controller;
 
 import com.cib.fund.dto.*;
+import com.cib.fund.feign.ApprovalServiceClient;
 import com.cib.fund.service.FundTransferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,51 +17,53 @@ import java.util.List;
 public class FundTransferController {
 
     private final FundTransferService fundTransferService;
+    private final ApprovalServiceClient approvalServiceClient;
 
     @PostMapping("/transfer")
     public ResponseEntity<ApiResponse<FundTransferResponse>> initiateTransfer(
             @Valid @RequestBody FundTransferRequest request) {
         FundTransferResponse response = fundTransferService.initiateTransfer(request);
+        try {
+            approvalServiceClient.submitForApproval(response.getId(), request.getInitiatedBy());
+        } catch (Exception e) {
+            // Logged inside client
+        }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         "Transfer initiated. Reference: " + response.getReferenceNumber() + ", ID: " + response.getId(),
                         response));
     }
 
-    @GetMapping("/pending/level-1")
-    public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getPendingLevel1() {
-        List<FundTransferResponse> response = fundTransferService.getPendingLevel1();
-        String msg = response.isEmpty()
-                ? "No Level 1 pending transactions found"
-                : "Level 1 pending transactions retrieved. Count: " + response.size();
-        return ResponseEntity.ok(ApiResponse.success(msg, response));
-    }
-
-    @GetMapping("/pending/level-2")
-    public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getPendingLevel2() {
-        List<FundTransferResponse> response = fundTransferService.getPendingLevel2();
-        String msg = response.isEmpty()
-                ? "No Level 2 pending transactions found"
-                : "Level 2 pending transactions retrieved. Count: " + response.size();
-        return ResponseEntity.ok(ApiResponse.success(msg, response));
-    }
-
-    @PutMapping("/level-1/{transactionId}")
-    public ResponseEntity<ApiResponse<FundTransferResponse>> actLevel1(
-            @PathVariable Long transactionId,
-            @Valid @RequestBody CheckerActionRequest request) {
-        FundTransferResponse response = fundTransferService.actLevel1(transactionId, request);
+    @PutMapping("/{id}/complete")
+    public ResponseEntity<ApiResponse<FundTransferResponse>> completeTransaction(
+            @PathVariable Long id,
+            @RequestParam String approvedBy) {
+        FundTransferResponse response = fundTransferService.completeTransaction(id, approvedBy);
         return ResponseEntity.ok(ApiResponse.success(
-                "Level 1 action completed for transaction " + transactionId, response));
+                "Transaction " + response.getReferenceNumber() + " completed by " + approvedBy,
+                response));
     }
 
-    @PutMapping("/level-2/{transactionId}")
-    public ResponseEntity<ApiResponse<FundTransferResponse>> actLevel2(
-            @PathVariable Long transactionId,
-            @Valid @RequestBody CheckerActionRequest request) {
-        FundTransferResponse response = fundTransferService.actLevel2(transactionId, request);
+    @PutMapping("/{id}/fail")
+    public ResponseEntity<ApiResponse<FundTransferResponse>> failTransaction(
+            @PathVariable Long id,
+            @RequestParam String approvedBy,
+            @RequestParam String reason) {
+        FundTransferResponse response = fundTransferService.failTransaction(id, approvedBy, reason);
         return ResponseEntity.ok(ApiResponse.success(
-                "Level 2 action completed for transaction " + transactionId, response));
+                "Transaction " + response.getReferenceNumber() + " failed. Reason: " + reason,
+                response));
+    }
+
+    @PutMapping("/{id}/reject")
+    public ResponseEntity<ApiResponse<FundTransferResponse>> rejectTransaction(
+            @PathVariable Long id,
+            @RequestParam String rejectedBy,
+            @RequestParam String reason) {
+        FundTransferResponse response = fundTransferService.rejectTransaction(id, rejectedBy, reason);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Transaction " + response.getReferenceNumber() + " rejected by " + rejectedBy,
+                response));
     }
 
     @GetMapping("/{id}")
@@ -75,19 +78,19 @@ public class FundTransferController {
     public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getTransactionsByCustomerId(
             @PathVariable Long customerId) {
         List<FundTransferResponse> response = fundTransferService.getTransactionsByCustomerId(customerId);
-        String msg = response.isEmpty()
+        String message = response.isEmpty()
                 ? "No transactions found for customer ID " + customerId
                 : "Transactions retrieved for customer ID " + customerId + ". Count: " + response.size();
-        return ResponseEntity.ok(ApiResponse.success(msg, response));
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 
     @GetMapping("/{id}/audit")
     public ResponseEntity<ApiResponse<List<TransactionAuditResponse>>> getTransactionAudit(
             @PathVariable Long id) {
         List<TransactionAuditResponse> response = fundTransferService.getTransactionAudit(id);
-        String msg = response.isEmpty()
+        String message = response.isEmpty()
                 ? "No audit records found for transaction ID " + id
                 : "Audit trail retrieved for transaction ID " + id + ". Count: " + response.size();
-        return ResponseEntity.ok(ApiResponse.success(msg, response));
+        return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 }
