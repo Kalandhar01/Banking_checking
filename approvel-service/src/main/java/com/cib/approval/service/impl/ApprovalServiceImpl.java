@@ -3,6 +3,7 @@ package com.cib.approval.service.impl;
 import com.cib.approval.dto.*;
 import com.cib.approval.exception.InvalidApprovalException;
 import com.cib.approval.exception.ResourceNotFoundException;
+import com.cib.approval.feign.BeneficiaryClient;
 import com.cib.approval.feign.CustomerServiceClient;
 import com.cib.approval.feign.FundServiceClient;
 import com.cib.approval.service.ApprovalService;
@@ -10,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 @Slf4j
@@ -18,13 +18,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ApprovalServiceImpl implements ApprovalService {
 
-    private static final BigDecimal LEVEL2_THRESHOLD = new BigDecimal("100000");
-
     private final FundServiceClient fundServiceClient;
     private final CustomerServiceClient customerServiceClient;
+    private final BeneficiaryClient beneficiaryClient;
 
     @Override
-    public FundTransactionDto actLevel1(Long transactionId, ApprovalActionRequest req) {
+    public FundTransactionDto actOnTransaction(Long transactionId, ApprovalActionRequest req) {
         FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
         if (transaction == null) {
             throw new ResourceNotFoundException("Transaction not found: " + transactionId);
@@ -36,73 +35,53 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
 
         CustomerUserDto checker = validateChecker(req.getCheckerId());
-        if (!"LEVEL_1".equalsIgnoreCase(checker.getCheckerLevel())) {
-            throw new InvalidApprovalException("Only LEVEL_1 checkers can use this endpoint.");
-        }
 
         if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
-            boolean requiresLevel2 = transaction.getAmount() != null
-                    && transaction.getAmount().compareTo(LEVEL2_THRESHOLD) >= 0;
-
-            FundTransactionDto approved = fundServiceClient.approveLevel1(transactionId, req.getCheckerId());
-            if (approved == null) {
-                throw new RuntimeException("Level 1 approval failed for transaction " + transactionId);
+            String validationError = validateTransactionEntities(transaction);
+            if (validationError != null) {
+                fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), validationError);
+                log.info("Transaction {} rejected: {}", transactionId, validationError);
+                return fundServiceClient.getTransaction(transactionId);
             }
 
-            if (!requiresLevel2) {
-                executeDebitAndComplete(transactionId, transaction.getUserId(),
-                        transaction.getAmount(), transaction.getReferenceNumber(), req.getCheckerId());
-            }
-            log.info("Transaction {} Level 1 approved by checker {}", transactionId, req.getCheckerId());
-            return fundServiceClient.getTransaction(transactionId);
-        } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
-            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 1 checker";
-            fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), reason);
-            log.info("Transaction {} rejected by Level 1 checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
-            return fundServiceClient.getTransaction(transactionId);
-        } else {
-            throw new InvalidApprovalException("Invalid action. Must be ACCEPT or REJECT.");
-        }
-    }
-
-    @Override
-    public FundTransactionDto actLevel2(Long transactionId, ApprovalActionRequest req) {
-        FundTransactionDto transaction = fundServiceClient.getTransaction(transactionId);
-        if (transaction == null) {
-            throw new ResourceNotFoundException("Transaction not found: " + transactionId);
-        }
-
-        if (!"LEVEL1_APPROVED".equals(transaction.getStatus())) {
-            throw new InvalidApprovalException(
-                    "Transaction must be in LEVEL1_APPROVED state. Current state: " + transaction.getStatus());
-        }
-
-        CustomerUserDto checker = validateChecker(req.getCheckerId());
-        if (!"LEVEL_2".equalsIgnoreCase(checker.getCheckerLevel())) {
-            throw new InvalidApprovalException("Only LEVEL_2 checkers can use this endpoint.");
-        }
-
-        if ("ACCEPT".equalsIgnoreCase(req.getAction())) {
-            FundTransactionDto approved = fundServiceClient.approveLevel2(transactionId, req.getCheckerId());
+            FundTransactionDto approved = fundServiceClient.approveTransaction(transactionId, req.getCheckerId());
             if (approved == null) {
-                throw new RuntimeException("Level 2 approval failed for transaction " + transactionId);
+                throw new RuntimeException("Approval failed for transaction " + transactionId);
             }
             executeDebitAndComplete(transactionId, transaction.getUserId(),
                     transaction.getAmount(), transaction.getReferenceNumber(), req.getCheckerId());
-            log.info("Transaction {} Level 2 approved by checker {}", transactionId, req.getCheckerId());
+            log.info("Transaction {} approved by checker {}", transactionId, req.getCheckerId());
             return fundServiceClient.getTransaction(transactionId);
         } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
-            String reason = req.getRemarks() != null ? req.getRemarks() : "Sent back by Level 2 checker";
-            fundServiceClient.sendBackToLevel1(transactionId, req.getCheckerId(), reason);
-            log.info("Transaction {} sent back to Level 1 by checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by checker";
+            fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), reason);
+            log.info("Transaction {} rejected by checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
             return fundServiceClient.getTransaction(transactionId);
         } else {
             throw new InvalidApprovalException("Invalid action. Must be ACCEPT or REJECT.");
         }
     }
 
+    private String validateTransactionEntities(FundTransactionDto transaction) {
+        CustomerUserDto maker = customerServiceClient.getUser(transaction.getUserId());
+        if (maker == null || !"ACTIVE".equalsIgnoreCase(maker.getStatus())) {
+            return "Maker (user ID " + transaction.getUserId() + ") is not ACTIVE";
+        }
+
+        CorporateCustomerResponse customer = customerServiceClient.getCustomer(transaction.getCustomerId());
+        if (customer == null || !"ACTIVE".equalsIgnoreCase(customer.getStatus())) {
+            return "Customer (ID " + transaction.getCustomerId() + ") is not ACTIVE";
+        }
+
+        if (!beneficiaryClient.isBeneficiaryActive(transaction.getBeneficiaryId())) {
+            return "Beneficiary (ID " + transaction.getBeneficiaryId() + ") is not ACTIVE";
+        }
+
+        return null;
+    }
+
     private void executeDebitAndComplete(Long transactionId, Long userId,
-                                          BigDecimal amount, String referenceNumber, String checkerId) {
+                                          java.math.BigDecimal amount, String referenceNumber, String checkerId) {
         AccountResponse account = customerServiceClient.getAccountByUserId(userId);
         if (account == null) {
             fundServiceClient.failTransaction(transactionId, checkerId, "Failed to fetch customer account");
@@ -143,16 +122,6 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     public List<FundTransactionDto> getPendingApprovals() {
         return fundServiceClient.getPendingTransactions();
-    }
-
-    @Override
-    public List<FundTransactionDto> getPendingLevel1() {
-        return fundServiceClient.getPendingLevel1Transactions();
-    }
-
-    @Override
-    public List<FundTransactionDto> getPendingLevel2() {
-        return fundServiceClient.getPendingLevel2Transactions();
     }
 
     @Override

@@ -27,6 +27,15 @@ public class FundTransferController {
                         response));
     }
 
+    @PutMapping("/{id}/approve")
+    public ResponseEntity<ApiResponse<FundTransferResponse>> approveTransaction(
+            @PathVariable Long id,
+            @RequestParam String checkerId) {
+        FundTransferResponse response = fundTransferService.approveTransaction(id, checkerId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Transaction " + response.getReferenceNumber() + " approved by " + checkerId, response));
+    }
+
     @PutMapping("/{id}/complete")
     public ResponseEntity<ApiResponse<FundTransferResponse>> completeTransaction(
             @PathVariable Long id,
@@ -77,53 +86,11 @@ public class FundTransferController {
         return ResponseEntity.ok(ApiResponse.success(message, response));
     }
 
-    @GetMapping("/pending/level-1")
-    public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getPendingLevel1() {
-        List<FundTransferResponse> response = fundTransferService.getPendingLevel1();
-        return ResponseEntity.ok(ApiResponse.success(
-                "Pending Level 1 transactions retrieved. Count: " + response.size(), response));
-    }
-
-    @GetMapping("/pending/level-2")
-    public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getPendingLevel2() {
-        List<FundTransferResponse> response = fundTransferService.getPendingLevel2();
-        return ResponseEntity.ok(ApiResponse.success(
-                "Pending Level 2 transactions retrieved. Count: " + response.size(), response));
-    }
-
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<FundTransferResponse>>> getAllPending() {
         List<FundTransferResponse> response = fundTransferService.getAllPending();
         return ResponseEntity.ok(ApiResponse.success(
                 "Pending transactions retrieved. Count: " + response.size(), response));
-    }
-
-    @PutMapping("/{id}/level-1-approve")
-    public ResponseEntity<ApiResponse<FundTransferResponse>> level1Approve(
-            @PathVariable Long id,
-            @RequestParam String checkerId) {
-        FundTransferResponse response = fundTransferService.approveLevel1(id, checkerId);
-        return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " Level 1 approved by " + checkerId, response));
-    }
-
-    @PutMapping("/{id}/level-2-approve")
-    public ResponseEntity<ApiResponse<FundTransferResponse>> level2Approve(
-            @PathVariable Long id,
-            @RequestParam String checkerId) {
-        FundTransferResponse response = fundTransferService.approveLevel2(id, checkerId);
-        return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " Level 2 approved by " + checkerId, response));
-    }
-
-    @PutMapping("/{id}/send-back-to-level1")
-    public ResponseEntity<ApiResponse<FundTransferResponse>> sendBackToLevel1(
-            @PathVariable Long id,
-            @RequestParam String rejectedBy,
-            @RequestParam String reason) {
-        FundTransferResponse response = fundTransferService.sendBackToLevel1(id, rejectedBy, reason);
-        return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " sent back to Level 1 by " + rejectedBy, response));
     }
 
     @GetMapping("/{id}/audit")

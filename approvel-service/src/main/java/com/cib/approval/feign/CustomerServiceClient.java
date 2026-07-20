@@ -3,6 +3,7 @@ package com.cib.approval.feign;
 import com.cib.approval.dto.AccountResponse;
 import com.cib.approval.dto.AccountTransactionRequest;
 import com.cib.approval.dto.ApiResponse;
+import com.cib.approval.dto.CorporateCustomerResponse;
 import com.cib.approval.dto.CustomerUserDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class CustomerServiceClient {
 
     private final RestTemplate restTemplate;
     private static final String USER_URL = "http://customer-service/customer/users";
+    private static final String CUSTOMER_URL = "http://customer-service/customer/company";
     private static final String ACCOUNT_URL = "http://customer-service/account";
 
     public CustomerUserDto getUser(Long userId) {
@@ -41,6 +43,29 @@ public class CustomerServiceClient {
             throw new RuntimeException("Customer service is unavailable. Please try again later.");
         } catch (Exception e) {
             log.error("Error fetching user {}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+
+    public CorporateCustomerResponse getCustomer(Long customerId) {
+        try {
+            String url = CUSTOMER_URL + "/" + customerId;
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<CorporateCustomerResponse>>() {}
+            );
+            ApiResponse<CorporateCustomerResponse> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Customer service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Customer service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error fetching customer {}: {}", customerId, e.getMessage());
             return null;
         }
     }

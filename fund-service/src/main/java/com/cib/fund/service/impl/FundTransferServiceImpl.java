@@ -18,19 +18,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FundTransferServiceImpl implements FundTransferService {
-
-    private static final BigDecimal LEVEL2_THRESHOLD = new BigDecimal("100000");
 
     private final FundTransactionRepository transactionRepository;
     private final TransactionAuditRepository auditRepository;
@@ -70,23 +66,34 @@ public class FundTransferServiceImpl implements FundTransferService {
 
     @Override
     @Transactional
+    public FundTransferResponse approveTransaction(Long transactionId, String checkerId) {
+        FundTransaction transaction = findTransaction(transactionId);
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            throw new InvalidTransactionException(
+                    "Only PENDING transactions can be approved. Current status: " + transaction.getStatus());
+        }
+        TransactionStatus fromStatus = transaction.getStatus();
+        transaction.setStatus(TransactionStatus.APPROVED);
+        transaction.setApprovedBy(checkerId);
+        transaction = transactionRepository.save(transaction);
+        createAudit(transaction, fromStatus, TransactionStatus.APPROVED, checkerId, "Approved by checker");
+        log.info("Transaction {} approved by checker {}", transaction.getReferenceNumber(), checkerId);
+        return toResponse(transaction);
+    }
+
+    @Override
+    @Transactional
     public FundTransferResponse completeTransaction(Long transactionId, String approvedBy) {
         FundTransaction transaction = findTransaction(transactionId);
-
-        if (transaction.getStatus() != TransactionStatus.PENDING
-                && transaction.getStatus() != TransactionStatus.LEVEL1_APPROVED
-                && transaction.getStatus() != TransactionStatus.APPROVED) {
+        if (transaction.getStatus() != TransactionStatus.APPROVED) {
             throw new InvalidTransactionException(
-                    "Only PENDING, LEVEL1_APPROVED, or APPROVED transactions can be completed. Current status: " + transaction.getStatus());
+                    "Only APPROVED transactions can be completed. Current status: " + transaction.getStatus());
         }
-
         TransactionStatus fromStatus = transaction.getStatus();
         transaction.setStatus(TransactionStatus.COMPLETED);
         transaction.setApprovedBy(approvedBy);
         transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.COMPLETED, approvedBy,
-                "Transaction completed");
-
+        createAudit(transaction, fromStatus, TransactionStatus.COMPLETED, approvedBy, "Transaction completed");
         log.info("Transaction {} completed by {}", transaction.getReferenceNumber(), approvedBy);
         return toResponse(transaction);
     }
@@ -95,36 +102,13 @@ public class FundTransferServiceImpl implements FundTransferService {
     @Transactional
     public FundTransferResponse failTransaction(Long transactionId, String approvedBy, String reason) {
         FundTransaction transaction = findTransaction(transactionId);
-
         TransactionStatus fromStatus = transaction.getStatus();
         transaction.setStatus(TransactionStatus.FAILED);
         transaction.setApprovedBy(approvedBy);
         transaction.setRejectionReason(reason);
         transaction = transactionRepository.save(transaction);
         createAudit(transaction, fromStatus, TransactionStatus.FAILED, approvedBy, reason);
-
         log.info("Transaction {} failed by {}. Reason: {}", transaction.getReferenceNumber(), approvedBy, reason);
-        return toResponse(transaction);
-    }
-
-    @Override
-    @Transactional
-    public FundTransferResponse sendBackToLevel1(Long transactionId, String rejectedBy, String reason) {
-        FundTransaction transaction = findTransaction(transactionId);
-
-        if (transaction.getStatus() != TransactionStatus.LEVEL1_APPROVED) {
-            throw new InvalidTransactionException(
-                    "Only LEVEL1_APPROVED transactions can be sent back to Level 1. Current status: " + transaction.getStatus());
-        }
-
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setStatus(TransactionStatus.PENDING);
-        transaction.setApprovedBy(rejectedBy);
-        transaction.setRejectionReason(reason);
-        transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.PENDING, rejectedBy, "Sent back to Level 1: " + reason);
-
-        log.info("Transaction {} sent back to Level 1 by {}. Reason: {}", transaction.getReferenceNumber(), rejectedBy, reason);
         return toResponse(transaction);
     }
 
@@ -132,19 +116,16 @@ public class FundTransferServiceImpl implements FundTransferService {
     @Transactional
     public FundTransferResponse rejectTransaction(Long transactionId, String rejectedBy, String reason) {
         FundTransaction transaction = findTransaction(transactionId);
-
         if (transaction.getStatus() != TransactionStatus.PENDING) {
             throw new InvalidTransactionException(
                     "Only PENDING transactions can be rejected. Current status: " + transaction.getStatus());
         }
-
         TransactionStatus fromStatus = transaction.getStatus();
         transaction.setStatus(TransactionStatus.REJECTED);
         transaction.setApprovedBy(rejectedBy);
         transaction.setRejectionReason(reason);
         transaction = transactionRepository.save(transaction);
         createAudit(transaction, fromStatus, TransactionStatus.REJECTED, rejectedBy, reason);
-
         log.info("Transaction {} rejected by {}. Reason: {}", transaction.getReferenceNumber(), rejectedBy, reason);
         return toResponse(transaction);
     }
@@ -162,76 +143,18 @@ public class FundTransferServiceImpl implements FundTransferService {
     }
 
     @Override
-    public List<TransactionAuditResponse> getTransactionAudit(Long transactionId) {
-        findTransaction(transactionId);
-        return auditRepository.findByTransactionIdOrderByCreatedAtAsc(transactionId)
-                .stream()
-                .map(this::toAuditResponse)
-                .toList();
-    }
-
-    @Override
-    public List<FundTransferResponse> getPendingLevel1() {
-        return transactionRepository.findPendingLevel1(LEVEL2_THRESHOLD)
-                .stream().map(this::toResponse).toList();
-    }
-
-    @Override
-    public List<FundTransferResponse> getPendingLevel2() {
-        List<FundTransferResponse> pendingHigh = transactionRepository.findPendingLevel2(LEVEL2_THRESHOLD)
-                .stream().map(this::toResponse).toList();
-        List<FundTransferResponse> level1Approved = transactionRepository.findLevel1Approved()
-                .stream().map(this::toResponse).toList();
-        return Stream.concat(pendingHigh.stream(), level1Approved.stream()).toList();
-    }
-
-    @Override
     public List<FundTransferResponse> getAllPending() {
         return transactionRepository.findByStatusOrderByCreatedAtDesc(TransactionStatus.PENDING)
                 .stream().map(this::toResponse).toList();
     }
 
     @Override
-    @Transactional
-    public FundTransferResponse approveLevel1(Long transactionId, String checkerId) {
-        FundTransaction transaction = findTransaction(transactionId);
-        if (transaction.getStatus() != TransactionStatus.PENDING) {
-            throw new InvalidTransactionException(
-                    "Only PENDING transactions can be Level 1 approved. Current status: " + transaction.getStatus());
-        }
-        BigDecimal amount = transaction.getAmount();
-        TransactionStatus fromStatus = transaction.getStatus();
-        if (amount != null && amount.compareTo(LEVEL2_THRESHOLD) >= 0) {
-            transaction.setStatus(TransactionStatus.LEVEL1_APPROVED);
-            createAudit(transaction, fromStatus, TransactionStatus.LEVEL1_APPROVED, checkerId,
-                    "Level 1 approved, awaiting Level 2");
-        } else {
-            transaction.setStatus(TransactionStatus.APPROVED);
-            transaction.setApprovedBy(checkerId);
-            createAudit(transaction, fromStatus, TransactionStatus.APPROVED, checkerId,
-                    "Level 1 approved and completed");
-        }
-        transaction = transactionRepository.save(transaction);
-        log.info("Transaction {} Level 1 approved by checker {}", transaction.getReferenceNumber(), checkerId);
-        return toResponse(transaction);
-    }
-
-    @Override
-    @Transactional
-    public FundTransferResponse approveLevel2(Long transactionId, String checkerId) {
-        FundTransaction transaction = findTransaction(transactionId);
-        if (transaction.getStatus() != TransactionStatus.LEVEL1_APPROVED) {
-            throw new InvalidTransactionException(
-                    "Transaction must be LEVEL1_APPROVED. Current status: " + transaction.getStatus());
-        }
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setStatus(TransactionStatus.APPROVED);
-        transaction.setApprovedBy(checkerId);
-        transaction = transactionRepository.save(transaction);
-        createAudit(transaction, fromStatus, TransactionStatus.APPROVED, checkerId,
-                "Level 2 approved");
-        log.info("Transaction {} Level 2 approved by checker {}", transaction.getReferenceNumber(), checkerId);
-        return toResponse(transaction);
+    public List<TransactionAuditResponse> getTransactionAudit(Long transactionId) {
+        findTransaction(transactionId);
+        return auditRepository.findByTransactionIdOrderByCreatedAtAsc(transactionId)
+                .stream()
+                .map(this::toAuditResponse)
+                .toList();
     }
 
     private FundTransaction findTransaction(Long id) {
