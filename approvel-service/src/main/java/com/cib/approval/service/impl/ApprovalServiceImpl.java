@@ -92,9 +92,9 @@ public class ApprovalServiceImpl implements ApprovalService {
             log.info("Transaction {} Level 2 approved by checker {}", transactionId, req.getCheckerId());
             return fundServiceClient.getTransaction(transactionId);
         } else if ("REJECT".equalsIgnoreCase(req.getAction())) {
-            String reason = req.getRemarks() != null ? req.getRemarks() : "Rejected by Level 2 checker";
-            fundServiceClient.rejectTransaction(transactionId, req.getCheckerId(), reason);
-            log.info("Transaction {} rejected by Level 2 checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
+            String reason = req.getRemarks() != null ? req.getRemarks() : "Sent back by Level 2 checker";
+            fundServiceClient.sendBackToLevel1(transactionId, req.getCheckerId(), reason);
+            log.info("Transaction {} sent back to Level 1 by checker {}. Reason: {}", transactionId, req.getCheckerId(), reason);
             return fundServiceClient.getTransaction(transactionId);
         } else {
             throw new InvalidApprovalException("Invalid action. Must be ACCEPT or REJECT.");

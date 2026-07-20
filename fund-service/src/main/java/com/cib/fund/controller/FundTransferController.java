@@ -116,6 +116,16 @@ public class FundTransferController {
                 "Transaction " + response.getReferenceNumber() + " Level 2 approved by " + checkerId, response));
     }
 
+    @PutMapping("/{id}/send-back-to-level1")
+    public ResponseEntity<ApiResponse<FundTransferResponse>> sendBackToLevel1(
+            @PathVariable Long id,
+            @RequestParam String rejectedBy,
+            @RequestParam String reason) {
+        FundTransferResponse response = fundTransferService.sendBackToLevel1(id, rejectedBy, reason);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Transaction " + response.getReferenceNumber() + " sent back to Level 1 by " + rejectedBy, response));
+    }
+
     @GetMapping("/{id}/audit")
     public ResponseEntity<ApiResponse<List<TransactionAuditResponse>>> getTransactionAudit(
             @PathVariable Long id) {

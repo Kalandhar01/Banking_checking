@@ -166,6 +166,30 @@ public class FundServiceClient {
         }
     }
 
+    public FundTransactionDto sendBackToLevel1(Long transactionId, String rejectedBy, String reason) {
+        try {
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/send-back-to-level1?rejectedBy=" + rejectedBy + "&reason=" + reason;
+            var response = restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    null,
+                    new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {
+                    }
+            );
+            ApiResponse<FundTransactionDto> body = response.getBody();
+            if (body != null && body.isSuccess()) {
+                return body.getData();
+            }
+            return null;
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        } catch (Exception e) {
+            log.error("Error sending transaction {} back to Level 1: {}", transactionId, e.getMessage());
+            return null;
+        }
+    }
+
     public void completeTransaction(Long transactionId, String completedBy) {
         try {
             String url = FUND_SERVICE_URL + "/" + transactionId + "/complete?approvedBy=" + completedBy;

@@ -19,4 +19,5 @@ public interface FundTransferService {
     List<FundTransferResponse> getAllPending();
     FundTransferResponse approveLevel1(Long transactionId, String checkerId);
     FundTransferResponse approveLevel2(Long transactionId, String checkerId);
+    FundTransferResponse sendBackToLevel1(Long transactionId, String rejectedBy, String reason);
 }

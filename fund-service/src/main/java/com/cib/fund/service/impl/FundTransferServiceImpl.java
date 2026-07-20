@@ -109,6 +109,27 @@ public class FundTransferServiceImpl implements FundTransferService {
 
     @Override
     @Transactional
+    public FundTransferResponse sendBackToLevel1(Long transactionId, String rejectedBy, String reason) {
+        FundTransaction transaction = findTransaction(transactionId);
+
+        if (transaction.getStatus() != TransactionStatus.LEVEL1_APPROVED) {
+            throw new InvalidTransactionException(
+                    "Only LEVEL1_APPROVED transactions can be sent back to Level 1. Current status: " + transaction.getStatus());
+        }
+
+        TransactionStatus fromStatus = transaction.getStatus();
+        transaction.setStatus(TransactionStatus.PENDING);
+        transaction.setApprovedBy(rejectedBy);
+        transaction.setRejectionReason(reason);
+        transaction = transactionRepository.save(transaction);
+        createAudit(transaction, fromStatus, TransactionStatus.PENDING, rejectedBy, "Sent back to Level 1: " + reason);
+
+        log.info("Transaction {} sent back to Level 1 by {}. Reason: {}", transaction.getReferenceNumber(), rejectedBy, reason);
+        return toResponse(transaction);
+    }
+
+    @Override
+    @Transactional
     public FundTransferResponse rejectTransaction(Long transactionId, String rejectedBy, String reason) {
         FundTransaction transaction = findTransaction(transactionId);
 
