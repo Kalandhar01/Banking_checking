@@ -10,6 +10,7 @@ import com.cib.fund.entity.TransactionAudit;
 import com.cib.fund.enums.TransactionStatus;
 import com.cib.fund.exception.InvalidTransactionException;
 import com.cib.fund.exception.ResourceNotFoundException;
+import com.cib.fund.feign.ApprovalServiceClient;
 import com.cib.fund.feign.BeneficiaryClient;
 import com.cib.fund.feign.CustomerAccountClient;
 import com.cib.fund.repository.FundTransactionRepository;
@@ -34,6 +35,7 @@ public class FundTransferServiceImpl implements FundTransferService {
     private final TransactionAuditRepository auditRepository;
     private final BeneficiaryClient beneficiaryClient;
     private final CustomerAccountClient customerAccountClient;
+    private final ApprovalServiceClient approvalServiceClient;
 
     @Override
     @Transactional
@@ -63,6 +65,12 @@ public class FundTransferServiceImpl implements FundTransferService {
 
         log.info("Transfer initiated: ref={}, amount={}, beneficiary={}",
                 transaction.getReferenceNumber(), transaction.getAmount(), transaction.getBeneficiaryName());
+
+        try {
+            approvalServiceClient.submitForApproval(transaction.getId(), request.getInitiatedBy());
+        } catch (Exception e) {
+            log.warn("Approval auto-submit failed for transaction {}: {}", transaction.getId(), e.getMessage());
+        }
 
         return toResponse(transaction);
     }

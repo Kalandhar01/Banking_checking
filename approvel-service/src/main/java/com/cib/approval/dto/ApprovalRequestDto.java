@@ -19,8 +19,6 @@ public class ApprovalRequestDto {
 
     private String makerName;
 
-    @NotBlank(message = "Checker ID is required")
     private String checkerId;
-
     private String level2CheckerId;
 }

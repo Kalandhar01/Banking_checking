@@ -26,7 +26,6 @@ public class ApprovalRequest {
 
     private String makerName;
 
-    @Column(nullable = false)
     private String checkerId;
 
     private String level2CheckerId;
