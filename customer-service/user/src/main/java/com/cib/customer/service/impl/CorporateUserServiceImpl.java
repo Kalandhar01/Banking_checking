@@ -5,7 +5,6 @@ import com.cib.customer.dto.CorporateUserRequest;
 import com.cib.customer.dto.CorporateUserResponse;
 import com.cib.customer.entity.CorporateCustomer;
 import com.cib.customer.entity.CorporateUser;
-import com.cib.customer.enums.Role;
 import com.cib.customer.exception.ResourceNotFoundException;
 import com.cib.customer.exception.UserAlreadyExistsException;
 import com.cib.customer.mapper.CorporateUserMapper;
@@ -42,12 +41,6 @@ public class CorporateUserServiceImpl implements CorporateUserService {
                             + request.getAccountNumber());
         }
 
-        if (request.getRole() == Role.CHECKER && request.getCheckerLevel() == null) {
-            throw new IllegalArgumentException("Checker level is required for CHECKER role");
-        }
-        if (request.getRole() == Role.MAKER && request.getCheckerLevel() != null) {
-            throw new IllegalArgumentException("Checker level should not be set for MAKER role");
-        }
 
         CorporateCustomer customer = getCustomer(request.getCustomerId());
 
@@ -114,12 +107,6 @@ public class CorporateUserServiceImpl implements CorporateUserService {
                             + request.getAccountNumber());
         }
 
-        if (request.getRole() == Role.CHECKER && request.getCheckerLevel() == null) {
-            throw new IllegalArgumentException("Checker level is required for CHECKER role");
-        }
-        if (request.getRole() == Role.MAKER && request.getCheckerLevel() != null) {
-            throw new IllegalArgumentException("Checker level should not be set for MAKER role");
-        }
 
         CorporateCustomer customer = getCustomer(request.getCustomerId());
 
