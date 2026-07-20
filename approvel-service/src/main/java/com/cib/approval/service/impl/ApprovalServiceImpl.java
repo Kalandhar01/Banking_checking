@@ -100,15 +100,38 @@ public class ApprovalServiceImpl implements ApprovalService {
                     "Level 1 access only. Cannot approve this transaction which requires Level 2 verification.");
         }
 
-        if (!requiresLevel2 || isLevel2) {
-            fundServiceClient.approveTransaction(transactionId, checkerId);
-            approval.setStatus(ApprovalStatus.APPROVED);
-            approval = approvalRepository.save(approval);
-            log.info("Transaction {} fully approved by checker {}", transactionId, checkerId);
-        } else {
+        if (requiresLevel2 && !isLevel2) {
             approval.setStatus(ApprovalStatus.LEVEL1_APPROVED);
             approval = approvalRepository.save(approval);
             log.info("Transaction {} approved by Level 1 checker {}", transactionId, checkerId);
+        } else {
+            AccountResponse account = customerServiceClient.getAccountByUserId(transaction.getUserId());
+            if (account == null) {
+                fundServiceClient.failTransaction(transactionId, checkerId, "Failed to fetch customer account");
+                approval.setStatus(ApprovalStatus.FAILED);
+                approval = approvalRepository.save(approval);
+                log.info("Transaction {} failed: unable to fetch account", transactionId);
+                return approvalMapper.toResponse(approval);
+            }
+
+            AccountTransactionRequest debitRequest = AccountTransactionRequest.builder()
+                    .amount(transaction.getAmount())
+                    .reference(transaction.getReferenceNumber())
+                    .build();
+
+            AccountResponse debitResult = customerServiceClient.debitAccount(account.getId(), debitRequest);
+            if (debitResult == null) {
+                fundServiceClient.failTransaction(transactionId, checkerId, "Debit failed");
+                approval.setStatus(ApprovalStatus.FAILED);
+                approval = approvalRepository.save(approval);
+                log.info("Transaction {} failed: debit failed", transactionId);
+                return approvalMapper.toResponse(approval);
+            }
+
+            fundServiceClient.completeTransaction(transactionId, checkerId);
+            approval.setStatus(ApprovalStatus.APPROVED);
+            approval = approvalRepository.save(approval);
+            log.info("Transaction {} fully approved by checker {}", transactionId, checkerId);
         }
 
         return approvalMapper.toResponse(approval);

@@ -41,9 +41,19 @@ public class FundServiceClient {
         }
     }
 
-    public void approveTransaction(Long transactionId, String approvedBy) {
+    public void completeTransaction(Long transactionId, String completedBy) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/approve?approvedBy=" + approvedBy;
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/complete?approvedBy=" + completedBy;
+            restTemplate.put(url, null);
+        } catch (ResourceAccessException e) {
+            log.error("Fund service unavailable: {}", e.getMessage());
+            throw new RuntimeException("Fund service is unavailable. Please try again later.");
+        }
+    }
+
+    public void failTransaction(Long transactionId, String failedBy, String reason) {
+        try {
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/fail?approvedBy=" + failedBy + "&reason=" + reason;
             restTemplate.put(url, null);
         } catch (ResourceAccessException e) {
             log.error("Fund service unavailable: {}", e.getMessage());
@@ -53,7 +63,7 @@ public class FundServiceClient {
 
     public void rejectTransaction(Long transactionId, String rejectedBy, String reason) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/reject?approvedBy=" + rejectedBy + "&reason=" + reason;
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/reject?rejectedBy=" + rejectedBy + "&reason=" + reason;
             restTemplate.put(url, null);
         } catch (ResourceAccessException e) {
             log.error("Fund service unavailable: {}", e.getMessage());

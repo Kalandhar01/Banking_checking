@@ -1,6 +1,5 @@
 package com.cib.fund.service.impl;
 
-import com.cib.fund.dto.AccountTransactionRequest;
 import com.cib.fund.dto.BeneficiaryValidationResponse;
 import com.cib.fund.dto.FundTransferRequest;
 import com.cib.fund.dto.FundTransferResponse;
@@ -12,7 +11,6 @@ import com.cib.fund.exception.InvalidTransactionException;
 import com.cib.fund.exception.ResourceNotFoundException;
 import com.cib.fund.feign.ApprovalServiceClient;
 import com.cib.fund.feign.BeneficiaryClient;
-import com.cib.fund.feign.CustomerAccountClient;
 import com.cib.fund.repository.FundTransactionRepository;
 import com.cib.fund.repository.TransactionAuditRepository;
 import com.cib.fund.service.FundTransferService;
@@ -34,7 +32,6 @@ public class FundTransferServiceImpl implements FundTransferService {
     private final FundTransactionRepository transactionRepository;
     private final TransactionAuditRepository auditRepository;
     private final BeneficiaryClient beneficiaryClient;
-    private final CustomerAccountClient customerAccountClient;
     private final ApprovalServiceClient approvalServiceClient;
 
     @Override
@@ -77,46 +74,12 @@ public class FundTransferServiceImpl implements FundTransferService {
 
     @Override
     @Transactional
-    public FundTransferResponse approveTransaction(Long transactionId, String approvedBy) {
+    public FundTransferResponse completeTransaction(Long transactionId, String approvedBy) {
         FundTransaction transaction = findTransaction(transactionId);
 
-        if (transaction.getStatus() != TransactionStatus.PENDING
-                && transaction.getStatus() != TransactionStatus.MODIFIED) {
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
             throw new InvalidTransactionException(
-                    "Only PENDING or MODIFIED transactions can be approved. Current status: " + transaction.getStatus());
-        }
-
-        String reference = transaction.getReferenceNumber();
-        AccountTransactionRequest debitRequest = AccountTransactionRequest.builder()
-                .amount(transaction.getAmount())
-                .reference(reference)
-                .build();
-
-        Long userId = Long.valueOf(transaction.getInitiatedBy());
-
-        var accountResponse = customerAccountClient.getAccountByUserId(userId);
-        if (accountResponse == null || !accountResponse.isSuccess() || accountResponse.getData() == null) {
-            transaction.setStatus(TransactionStatus.FAILED);
-            transaction.setApprovedBy(approvedBy);
-            transaction.setRejectionReason("Failed to fetch customer account");
-            transaction = transactionRepository.save(transaction);
-            createAudit(transaction, transaction.getStatus(), TransactionStatus.FAILED, approvedBy,
-                    "Approval failed: unable to fetch account");
-            return toResponse(transaction);
-        }
-
-        Long accountId = accountResponse.getData().getId();
-        var debitResponse = customerAccountClient.debitAccount(accountId, debitRequest);
-
-        if (debitResponse == null || !debitResponse.isSuccess()) {
-            String reason = (debitResponse != null) ? debitResponse.getMessage() : "Customer service unavailable";
-            transaction.setStatus(TransactionStatus.FAILED);
-            transaction.setApprovedBy(approvedBy);
-            transaction.setRejectionReason(reason);
-            transaction = transactionRepository.save(transaction);
-            createAudit(transaction, transaction.getStatus(), TransactionStatus.FAILED, approvedBy,
-                    "Approval failed: " + reason);
-            return toResponse(transaction);
+                    "Only PENDING transactions can be completed. Current status: " + transaction.getStatus());
         }
 
         TransactionStatus fromStatus = transaction.getStatus();
@@ -124,11 +87,25 @@ public class FundTransferServiceImpl implements FundTransferService {
         transaction.setApprovedBy(approvedBy);
         transaction = transactionRepository.save(transaction);
         createAudit(transaction, fromStatus, TransactionStatus.COMPLETED, approvedBy,
-                "Transaction completed. Amount " + transaction.getAmount() + " debited from account " + accountId);
+                "Transaction completed");
 
-        log.info("Transaction {} completed. Amount {} debited from account {} by {}",
-                reference, transaction.getAmount(), accountId, approvedBy);
+        log.info("Transaction {} completed by {}", transaction.getReferenceNumber(), approvedBy);
+        return toResponse(transaction);
+    }
 
+    @Override
+    @Transactional
+    public FundTransferResponse failTransaction(Long transactionId, String approvedBy, String reason) {
+        FundTransaction transaction = findTransaction(transactionId);
+
+        TransactionStatus fromStatus = transaction.getStatus();
+        transaction.setStatus(TransactionStatus.FAILED);
+        transaction.setApprovedBy(approvedBy);
+        transaction.setRejectionReason(reason);
+        transaction = transactionRepository.save(transaction);
+        createAudit(transaction, fromStatus, TransactionStatus.FAILED, approvedBy, reason);
+
+        log.info("Transaction {} failed by {}. Reason: {}", transaction.getReferenceNumber(), approvedBy, reason);
         return toResponse(transaction);
     }
 
@@ -147,36 +124,9 @@ public class FundTransferServiceImpl implements FundTransferService {
         transaction.setApprovedBy(rejectedBy);
         transaction.setRejectionReason(reason);
         transaction = transactionRepository.save(transaction);
-
         createAudit(transaction, fromStatus, TransactionStatus.REJECTED, rejectedBy, reason);
 
         log.info("Transaction {} rejected by {}. Reason: {}", transaction.getReferenceNumber(), rejectedBy, reason);
-        return toResponse(transaction);
-    }
-
-    @Override
-    @Transactional
-    public FundTransferResponse modifyAndResubmit(Long transactionId, FundTransferRequest request) {
-        FundTransaction transaction = findTransaction(transactionId);
-
-        if (transaction.getStatus() != TransactionStatus.REJECTED) {
-            throw new InvalidTransactionException(
-                    "Only REJECTED transactions can be modified and resubmitted. Current status: " + transaction.getStatus());
-        }
-
-        TransactionStatus fromStatus = transaction.getStatus();
-        transaction.setAmount(request.getAmount());
-        transaction.setCurrency(request.getCurrency());
-        transaction.setBeneficiaryAccount(request.getBeneficiaryAccount());
-        transaction.setBeneficiaryName(request.getBeneficiaryName());
-        transaction.setBeneficiaryId(request.getBeneficiaryId());
-        transaction.setStatus(TransactionStatus.MODIFIED);
-        transaction.setRejectionReason(null);
-        transaction = transactionRepository.save(transaction);
-
-        createAudit(transaction, fromStatus, TransactionStatus.MODIFIED, request.getInitiatedBy(), "Transaction modified and resubmitted");
-
-        log.info("Transaction {} modified and resubmitted", transaction.getReferenceNumber());
         return toResponse(transaction);
     }
 
