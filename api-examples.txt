@@ -38,7 +38,12 @@ Response:
 
 ---
 
-PUT /fund/{id}/approve?checkerId=2
+PUT /fund/{id}/approve
+Request (JSON body):
+{
+  "checkerId": "2"
+}
+
 Response:
 {
   "success": true,
@@ -53,7 +58,12 @@ Response:
 
 ---
 
-PUT /fund/{id}/complete?approvedBy=2
+PUT /fund/{id}/complete
+Request (JSON body):
+{
+  "approvedBy": "2"
+}
+
 Response:
 {
   "success": true,
@@ -68,7 +78,13 @@ Response:
 
 ---
 
-PUT /fund/{id}/reject?rejectedBy=2&reason=Invalid%20details
+PUT /fund/{id}/reject
+Request (JSON body):
+{
+  "rejectedBy": "2",
+  "reason": "Invalid details"
+}
+
 Response:
 {
   "success": true,
@@ -84,7 +100,13 @@ Response:
 
 ---
 
-PUT /fund/{id}/fail?approvedBy=2&reason=Debit%20failed
+PUT /fund/{id}/fail
+Request (JSON body):
+{
+  "approvedBy": "2",
+  "reason": "Debit failed"
+}
+
 Response:
 {
   "success": true,

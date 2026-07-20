@@ -5,12 +5,14 @@ import com.cib.approval.dto.FundTransactionDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -70,11 +72,12 @@ public class FundServiceClient {
 
     public FundTransactionDto approveTransaction(Long transactionId, String checkerId) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/approve?checkerId=" + checkerId;
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/approve";
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("checkerId", checkerId));
             var response = restTemplate.exchange(
                     url,
                     HttpMethod.PUT,
-                    null,
+                    entity,
                     new ParameterizedTypeReference<ApiResponse<FundTransactionDto>>() {
                     }
             );
@@ -95,8 +98,15 @@ public class FundServiceClient {
 
     public void completeTransaction(Long transactionId, String completedBy) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/complete?approvedBy=" + completedBy;
-            restTemplate.put(url, null);
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/complete";
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("approvedBy", completedBy));
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    entity,
+                    new ParameterizedTypeReference<ApiResponse<Void>>() {
+                    }
+            );
         } catch (ResourceAccessException e) {
             log.error("Fund service unavailable: {}", e.getMessage());
             throw new RuntimeException("Fund service is unavailable. Please try again later.");
@@ -105,8 +115,15 @@ public class FundServiceClient {
 
     public void failTransaction(Long transactionId, String failedBy, String reason) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/fail?approvedBy=" + failedBy + "&reason=" + reason;
-            restTemplate.put(url, null);
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/fail";
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("approvedBy", failedBy, "reason", reason));
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    entity,
+                    new ParameterizedTypeReference<ApiResponse<Void>>() {
+                    }
+            );
         } catch (ResourceAccessException e) {
             log.error("Fund service unavailable: {}", e.getMessage());
             throw new RuntimeException("Fund service is unavailable. Please try again later.");
@@ -115,8 +132,15 @@ public class FundServiceClient {
 
     public void rejectTransaction(Long transactionId, String rejectedBy, String reason) {
         try {
-            String url = FUND_SERVICE_URL + "/" + transactionId + "/reject?rejectedBy=" + rejectedBy + "&reason=" + reason;
-            restTemplate.put(url, null);
+            String url = FUND_SERVICE_URL + "/" + transactionId + "/reject";
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("rejectedBy", rejectedBy, "reason", reason));
+            restTemplate.exchange(
+                    url,
+                    HttpMethod.PUT,
+                    entity,
+                    new ParameterizedTypeReference<ApiResponse<Void>>() {
+                    }
+            );
         } catch (ResourceAccessException e) {
             log.error("Fund service unavailable: {}", e.getMessage());
             throw new RuntimeException("Fund service is unavailable. Please try again later.");

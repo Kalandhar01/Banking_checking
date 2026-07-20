@@ -30,41 +30,39 @@ public class FundTransferController {
     @PutMapping("/{id}/approve")
     public ResponseEntity<ApiResponse<FundTransferResponse>> approveTransaction(
             @PathVariable Long id,
-            @RequestParam String checkerId) {
-        FundTransferResponse response = fundTransferService.approveTransaction(id, checkerId);
+            @Valid @RequestBody ApproveRequest request) {
+        FundTransferResponse response = fundTransferService.approveTransaction(id, request.getCheckerId());
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " approved by " + checkerId, response));
+                "Transaction " + response.getReferenceNumber() + " approved by " + request.getCheckerId(), response));
     }
 
     @PutMapping("/{id}/complete")
     public ResponseEntity<ApiResponse<FundTransferResponse>> completeTransaction(
             @PathVariable Long id,
-            @RequestParam String approvedBy) {
-        FundTransferResponse response = fundTransferService.completeTransaction(id, approvedBy);
+            @Valid @RequestBody CompleteRequest request) {
+        FundTransferResponse response = fundTransferService.completeTransaction(id, request.getApprovedBy());
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " completed by " + approvedBy,
+                "Transaction " + response.getReferenceNumber() + " completed by " + request.getApprovedBy(),
                 response));
     }
 
     @PutMapping("/{id}/fail")
     public ResponseEntity<ApiResponse<FundTransferResponse>> failTransaction(
             @PathVariable Long id,
-            @RequestParam String approvedBy,
-            @RequestParam String reason) {
-        FundTransferResponse response = fundTransferService.failTransaction(id, approvedBy, reason);
+            @Valid @RequestBody FailRequest request) {
+        FundTransferResponse response = fundTransferService.failTransaction(id, request.getApprovedBy(), request.getReason());
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " failed. Reason: " + reason,
+                "Transaction " + response.getReferenceNumber() + " failed. Reason: " + request.getReason(),
                 response));
     }
 
     @PutMapping("/{id}/reject")
     public ResponseEntity<ApiResponse<FundTransferResponse>> rejectTransaction(
             @PathVariable Long id,
-            @RequestParam String rejectedBy,
-            @RequestParam String reason) {
-        FundTransferResponse response = fundTransferService.rejectTransaction(id, rejectedBy, reason);
+            @Valid @RequestBody RejectRequest request) {
+        FundTransferResponse response = fundTransferService.rejectTransaction(id, request.getRejectedBy(), request.getReason());
         return ResponseEntity.ok(ApiResponse.success(
-                "Transaction " + response.getReferenceNumber() + " rejected by " + rejectedBy,
+                "Transaction " + response.getReferenceNumber() + " rejected by " + request.getRejectedBy(),
                 response));
     }
 
